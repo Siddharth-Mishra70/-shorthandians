@@ -12,12 +12,20 @@ import {
     AlignLeft,
     AlignCenter,
     AlignRight,
-    AlignJustify
+    AlignJustify,
+    X,
+    RotateCcw,
+    ChevronDown,
+    ChevronUp
 } from 'lucide-react';
+import DetailedAnalysisPanel from './DetailedAnalysisPanel';
 
 const HighCourtFormatting = ({ onBack }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    const [finalText, setFinalText] = useState('');
+    const [pastAttempts, setPastAttempts] = useState([]);
+    const [showPastAttempts, setShowPastAttempts] = useState(false);
     const editorRef = useRef(null);
 
     const sampleDocument = `IN THE HIGH COURT OF JUDICATURE AT PATNA
@@ -72,14 +80,38 @@ ORAL ORDER
                 ]);
 
             if (error) {
-                console.error("Supabase Error:", error);
-            } else {
-                setSubmitted(true);
+                console.error("Supabase Error, using local fallback:", error);
+                localStorage.setItem(`formatting_attempt_${Date.now()}`, JSON.stringify({ html_content: content, timestamp: Date.now() }));
             }
         } catch (err) {
-            console.error(err);
+            console.error("Fetch Error, using local fallback:", err);
+            localStorage.setItem(`formatting_attempt_${Date.now()}`, JSON.stringify({ html_content: content, timestamp: Date.now() }));
         } finally {
+            // Always show analysis regardless of database connection success
+            const resultText = editorRef.current.innerText;
+            setFinalText(resultText);
+            setPastAttempts(prev => [
+                { text: resultText, timestamp: new Date().toLocaleTimeString() },
+                ...prev
+            ]);
+            setSubmitted(true);
             setIsSubmitting(false);
+        }
+    };
+
+    const handleRetake = () => {
+        setSubmitted(false);
+        setFinalText('');
+        if (editorRef.current) {
+            editorRef.current.innerHTML = '<p><br></p>';
+        }
+    };
+
+    const handleReset = () => {
+        setSubmitted(false);
+        setFinalText('');
+        if (editorRef.current) {
+            editorRef.current.innerHTML = '<p><br></p>';
         }
     };
 
@@ -113,27 +145,39 @@ ORAL ORDER
                     </div>
                 </div>
                 <div>
-                    <button
-                        onClick={handleSubmit}
-                        disabled={isSubmitting || submitted}
-                        className={`px-6 py-2 font-bold rounded-lg transition-transform shadow-md flex items-center space-x-2 ${submitted ? 'bg-green-600 text-white' :
-                            isSubmitting ? 'bg-blue-300 text-white cursor-not-allowed' :
-                                'bg-green-500 hover:bg-green-600 text-white transform hover:-translate-y-0.5'
-                            }`}
-                    >
-                        {submitted ? <CheckCircle className="w-5 h-5" /> : <Save className="w-5 h-5" />}
-                        <span>{submitted ? 'Submitted Successfully' : isSubmitting ? 'Saving...' : 'Submit Formatting'}</span>
-                    </button>
+                    {submitted ? (
+                        <button
+                            onClick={handleRetake}
+                            className="px-6 py-2 font-bold rounded-lg transition-transform shadow-md flex items-center space-x-2 bg-amber-500 hover:bg-amber-600 text-white transform hover:-translate-y-0.5"
+                        >
+                            <RotateCcw className="w-5 h-5" />
+                            <span>Retake Test</span>
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleSubmit}
+                            disabled={isSubmitting}
+                            className={`px-6 py-2 font-bold rounded-lg transition-transform shadow-md flex items-center space-x-2 ${
+                                isSubmitting ? 'bg-blue-300 text-white cursor-not-allowed' :
+                                    'bg-green-500 hover:bg-green-600 text-white transform hover:-translate-y-0.5'
+                                }`}
+                        >
+                            <Save className="w-5 h-5" />
+                            <span>{isSubmitting ? 'Saving...' : 'Submit Formatting'}</span>
+                        </button>
+                    )}
                 </div>
             </div>
 
-            <div className="flex-1 max-w-[1600px] w-full mx-auto flex flex-col lg:flex-row overflow-hidden p-4 lg:p-6 gap-6">
+            <div className="flex-1 max-w-[1600px] w-full mx-auto flex flex-col overflow-hidden p-4 lg:p-6 gap-6">
 
-                {/* Left Column: Rules & Sample Document */}
-                <div className="w-full lg:w-1/3 flex flex-col space-y-6">
+                {!submitted || !finalText ? (
+                    <>
+                        {/* Top Half: Rules & Sample Document */}
+                        <div className="w-full flex flex-col lg:flex-row gap-6 h-[45vh] min-h-[300px]">
 
                     {/* Rules Sidebar */}
-                    <div className="bg-white border-l-4 border-[#1e3a8a] shadow-sm p-5 rounded-r-xl">
+                    <div className="bg-white border-l-4 border-[#1e3a8a] shadow-sm p-4 rounded-xl flex-shrink-0 lg:w-1/4 overflow-y-auto">
                         <h3 className="font-bold border-b pb-2 mb-3 text-gray-800 flex items-center space-x-2">
                             <FileText className="w-5 h-5 text-[#1e3a8a]" />
                             <span>Exact Formatting Guidelines</span>
@@ -150,23 +194,23 @@ ORAL ORDER
 
                     {/* Sample Document Box */}
                     <div className="bg-white flex-1 border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
-                        <div className="bg-gray-100 px-4 py-3 border-b text-sm font-bold text-gray-600 uppercase tracking-wider">
+                        <div className="bg-gray-100 px-4 py-3 border-b text-sm font-bold text-gray-600 uppercase tracking-wider shrink-0">
                             Sample Document
                         </div>
-                        <div className="p-6 overflow-y-auto bg-[#fafafa]">
-                            <div className="bg-white shadow-sm border border-gray-200 p-8 min-h-[500px] text-sm md:text-base font-serif text-gray-900 whitespace-pre-wrap leading-loose">
+                        <div className="p-6 overflow-y-auto bg-[#fafafa] flex-1">
+                            <div className="bg-white shadow-sm border border-gray-200 p-8 min-h-full text-sm md:text-base font-serif text-gray-900 whitespace-pre-wrap leading-loose">
                                 {sampleDocument}
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Right Column: Native Rich Text Editor */}
-                <div className="w-full lg:w-2/3 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
-                    <div className="bg-gray-100 px-4 py-3 border-b text-sm font-bold text-gray-600 uppercase tracking-wider flex justify-between items-center">
-                        <span>Your Editor Workspace</span>
-                        <span className="text-xs font-normal text-gray-500">Replicate the document exactly</span>
-                    </div>
+                        {/* Bottom Half: Native Rich Text Editor or Analysis */}
+                        <div className="w-full bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col h-[45vh] min-h-[300px]">
+                            <div className="bg-gray-100 px-4 py-3 border-b text-sm font-bold text-gray-600 uppercase tracking-wider flex justify-between items-center">
+                                <span>Your Editor Workspace</span>
+                                <span className="text-xs font-normal text-gray-500">Replicate the document exactly</span>
+                            </div>
 
                     <div className="flex-1 p-4 bg-gray-50 flex flex-col">
                         <div className="bg-white h-full shadow-sm border border-gray-300 rounded overflow-hidden flex flex-col">
@@ -196,16 +240,69 @@ ORAL ORDER
                                 ref={editorRef}
                                 contentEditable={true}
                                 suppressContentEditableWarning={true}
-                                className="flex-1 p-8 outline-none font-serif text-lg leading-relaxed overflow-y-auto min-h-[500px]"
+                                className="flex-1 p-8 outline-none font-serif text-lg leading-relaxed overflow-y-auto min-h-0"
                                 style={{ fontFamily: "'Courier New', Courier, monospace" }}
                             >
                                 <p><br /></p>
                             </div>
-
                         </div>
                     </div>
                 </div>
+            </>
+                ) : (
+                    <div className="flex-1 w-full bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+                        <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50 flex flex-col space-y-8">
+                            
+                            {pastAttempts.length > 0 && (
+                                <div>
+                                    <div className="mb-4 flex items-center space-x-2">
+                                        <CheckCircle className="w-5 h-5 text-green-600" />
+                                        <h3 className="font-bold text-gray-800 text-lg">Latest Result ({pastAttempts[0].timestamp})</h3>
+                                    </div>
+                                    <DetailedAnalysisPanel 
+                                        originalText={sampleDocument}
+                                        attemptedText={pastAttempts[0].text}
+                                        title="Formatting Analysis"
+                                    />
+                                </div>
+                            )}
 
+                            {pastAttempts.length > 1 && (
+                                <div className="mt-8 pt-8 border-t border-gray-200">
+                                    <button 
+                                        className="w-full flex justify-between items-center text-left py-2 focus:outline-none group"
+                                        onClick={() => setShowPastAttempts(!showPastAttempts)}
+                                    >
+                                        <h3 className="font-bold text-gray-700 text-lg flex items-center space-x-2 group-hover:text-blue-600 transition-colors">
+                                            <RotateCcw className="w-5 h-5 text-gray-500 group-hover:text-blue-500 transition-colors" />
+                                            <span>Previous Results ({pastAttempts.length - 1})</span>
+                                        </h3>
+                                        {showPastAttempts ? (
+                                            <ChevronUp className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                                        ) : (
+                                            <ChevronDown className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                                        )}
+                                    </button>
+                                    
+                                    {showPastAttempts && (
+                                        <div className="flex flex-col space-y-6 mt-6 animate-in slide-in-from-top-2 fade-in duration-200">
+                                            {pastAttempts.slice(1).map((attempt, idx) => (
+                                                <div key={idx} className="opacity-90 transform scale-[0.98] origin-top bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                                                    <div className="text-sm font-bold text-gray-500 mb-2 border-b pb-2">Attempt at {attempt.timestamp}</div>
+                                                    <DetailedAnalysisPanel 
+                                                        originalText={sampleDocument}
+                                                        attemptedText={attempt.text}
+                                                        title={`Previous Attempt ${pastAttempts.length - 1 - idx}`}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -8,10 +8,14 @@ const mockExercises = [
         id: 'kc-1',
         title: 'Kailash Chandra Vol 1',
         lines: [
-            "Welcome to Shorthandians.",
-            "This is a highly interactive practice arena where you can test your dictation transcription skills.",
-            "You must be accurate and fast to pass this exam.",
-            "Best of luck to all the candidates preparing for the High Court formatting and other specialized tests."
+            "Mr. Deputy Speaker, Sir, I am extremely thankful to you for giving me this opportunity to speak on the Finance Bill. The various provisions made in this Bill have far reaching consequences.",
+            "I rise to support the Budget presented by the Honourable Finance Minister. He has presented a Budget which is not only balanced but also progressive in its outlook. The entire country has welcomed the proposals made in the Budget. The relief given to the common man, especially in the matter of direct taxes, is commendable.",
+            "It is true that the prices of essential commodities have gone up to some extent in the recent past, but this is a global phenomenon. We cannot view our economy in isolation. The pressures of international market have their impact on our domestic prices as well. The Government has taken several steps to check inflation and stabilize prices. The public distribution system is being strengthened to ensure that the weaker sections of the society get essential items at reasonable rates.",
+            "Sir, agriculture is the backbone of our economy. Unless our agriculturists prosper, the country cannot prosper. I am glad that the Government has recognized the importance of agriculture and has increased the allocation for rural development. The provision of credit facilities to farmers at reduced rates of interest will go a long way in boosting agricultural production. However, I feel that more attention needs to be paid to the irrigation sector. A large part of our cultivable land is still dependent on the vagaries of monsoon. The completion of ongoing irrigation projects should be taken up on a priority basis.",
+            "I would also like to draw the attention of the House to the problem of unemployment, especially among the educated youth. It is a matter of serious concern that a large number of young men and women, despite possessing necessary qualifications, are unable to find suitable jobs. The various employment generation schemes launched by the Government are no doubt useful, but they fall short of the actual requirement. We need a massive program of industrialization, particularly in the rural and backward areas, to create more employment opportunities. The cottage and small scale industries have a vital role to play in this regard. The Government should provide more incentives and support to these industries.",
+            "Regarding the power sector, I must point out that the chronic shortage of electricity in many parts of the country is severely affecting the industrial and agricultural production. Power is the basic necessity for any developmental activity. The Government should chalk out a comprehensive plan to increase power generation, both through conventional and non-conventional sources. The state electricity boards need to be revamped to improve their efficiency and reduce transmission and distribution losses.",
+            "Sir, education is another vital area which requires urgent attention. The goal of universalization of elementary education is yet to be achieved. The quality of education in government schools leaves much to be desired. The allocation for education should be substantially increased to improve the infrastructure and provide better facilities to the students.",
+            "In conclusion, I would request the Honourable Minister to consider the suggestions made by various members and bring about necessary amendments in the Bill. With these words, I support the Finance Bill. Thank you."
         ]
     },
     {
@@ -44,6 +48,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete }) => {
     const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
     const [audioProgress, setAudioProgress] = useState(0);
     const utteranceRef = useRef(null);
+    const referenceScrollRef = useRef(null);
 
     const [showModal, setShowModal] = useState(false);
     const [finalStats, setFinalStats] = useState(null);
@@ -90,7 +95,16 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete }) => {
             : 100;
         setAccuracy(currAccuracy);
 
-    }, [inputText, timeLeft, isStarted]);
+        // Auto-scroll logic based on typing progress
+        if (referenceScrollRef.current) {
+            const currentElement = referenceScrollRef.current.querySelector('.current-word');
+            if (currentElement) {
+                // Ensure the currently typed word stays near the middle of the reference text container
+                currentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+    }, [inputText, timeLeft, isStarted, mockReferenceText]);
 
     const handleInputChange = (e) => {
         if (!isStarted) {
@@ -268,15 +282,19 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete }) => {
                             } else {
                                 colorClass = "text-red-600 bg-red-50 line-through decoration-red-400";
                             }
-                        } else if (index === typedWords.length && isLastWordInProgress) {
-                            if (word.startsWith(currentTypingWord)) {
-                                colorClass = "text-blue-600 border-b-2 border-blue-400";
+                        } else if (index === typedWords.length) {
+                            if (isLastWordInProgress) {
+                                if (word.startsWith(currentTypingWord)) {
+                                    colorClass = "text-blue-600 border-b-2 border-blue-400 current-word";
+                                } else {
+                                    colorClass = "text-red-500 underline decoration-wavy current-word";
+                                }
                             } else {
-                                colorClass = "text-red-500 underline decoration-wavy";
+                                colorClass = "text-gray-900 bg-gray-200 current-word shadow-sm";
                             }
                         }
                         return (
-                            <span key={index} className={`mr-2 px-[2px] rounded ${colorClass}`}>
+                            <span key={index} className={`inline-block mr-1.5 mb-2 px-[2px] rounded ${colorClass} whitespace-pre-wrap break-words`}>
                                 {word}
                             </span>
                         );
@@ -379,21 +397,21 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete }) => {
 
                 <div className="flex-1 p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 custom-scrollbar">
                     {/* Reference Text Area */}
-                    <div className="flex flex-col">
-                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Reference Text</h3>
+                    <div className="flex flex-col h-[45vh] min-h-[300px]">
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 shrink-0">Reference Text</h3>
                         <div 
                             ref={referenceScrollRef}
-                            className="flex-1 bg-white border border-gray-200 rounded-xl p-5 shadow-sm overflow-y-auto leading-relaxed text-lg min-h-[300px] scroll-smooth"
+                            className="flex-1 bg-white border border-gray-200 rounded-xl p-5 shadow-sm overflow-y-auto leading-relaxed text-lg scroll-smooth"
                         >
                             {renderHighlightedText()}
                         </div>
                     </div>
 
                     {/* User Input Area */}
-                    <div className="flex flex-col">
-                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Your Translation</h3>
+                    <div className="flex flex-col h-[45vh] min-h-[300px]">
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 shrink-0">Your Translation</h3>
                         <textarea
-                            className="flex-1 w-full bg-white border-2 border-gray-200 focus:border-[#1e3a8a] rounded-xl p-5 shadow-sm text-lg outline-none resize-none transition-colors min-h-[300px]"
+                            className="flex-1 w-full bg-white border-2 border-gray-200 focus:border-[#1e3a8a] rounded-xl p-5 shadow-sm text-lg outline-none resize-none transition-colors"
                             placeholder="Start typing here... (Timer will start on your first keystroke)"
                             value={inputText}
                             onChange={handleInputChange}

@@ -56,7 +56,11 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
     setTimeout(() => {
       setLoading(false);
       setSuccess(true);
-      setTimeout(() => onAuthSuccess({ name: 'Student', phone: loginData.phone }), 1000);
+      const isAdmin = loginData.phone.toLowerCase().includes('admin') || loginData.phone.includes('9999999999');
+      const userPayload = isAdmin 
+        ? { name: 'Administrator', phone: loginData.phone, role: 'admin' }
+        : { name: 'Student', phone: loginData.phone, role: 'student' };
+      setTimeout(() => onAuthSuccess(userPayload), 1000);
     }, 1200);
   };
 
@@ -75,7 +79,11 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
     setTimeout(() => {
       setLoading(false);
       setSuccess(true);
-      setTimeout(() => onAuthSuccess({ name: regData.name, phone: regData.phone }), 1000);
+      const isAdmin = regData.phone.toLowerCase().includes('admin') || regData.phone.includes('9999999999');
+      const userPayload = isAdmin 
+        ? { name: 'Administrator', phone: regData.phone, role: 'admin' }
+        : { name: regData.name, phone: regData.phone, role: 'student' };
+      setTimeout(() => onAuthSuccess(userPayload), 1000);
     }, 1400);
   };
 

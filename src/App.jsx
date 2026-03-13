@@ -24,6 +24,7 @@ import AuthPage from './AuthPage';
 import LoginRequiredModal from './LoginRequiredModal';
 import LivePreviewSection from './LivePreviewSection';
 import ResultAnalysisPage from './ResultAnalysisPage';
+import AdminPanel from './AdminPanel';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Dashboard Sub-components
@@ -335,6 +336,10 @@ function App() {
   }
 
   // ── Dashboard (Protected) ─────────────────────────────────
+  if (user?.role === 'admin') {
+    return <AdminPanel user={user} onLogout={handleLogout} />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
