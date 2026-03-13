@@ -31,9 +31,22 @@ const mockExercises = [
 ];
 
 const TypingArena = ({ initialCourse = 'kc-1', onTestComplete }) => {
-    const [selectedExercise, setSelectedExercise] = useState(() => 
-        mockExercises.find(e => e.title.includes(initialCourse) || e.id === initialCourse) || mockExercises[0]
-    );
+    const [selectedExercise, setSelectedExercise] = useState(() => {
+        const found = mockExercises.find(e => e.title.includes(initialCourse) || e.id === initialCourse) || mockExercises[0];
+        
+        // Dynamically insert uploaded Kailash Chandra data if available
+        if (found.id === 'kc-1') {
+            const adminData = localStorage.getItem('admin_kailash_data');
+            if (adminData) {
+                return {
+                    ...found,
+                    title: 'Kailash Chandra Vol (Daily Update)',
+                    lines: adminData.split('\n').filter(line => line.trim() !== '')
+                };
+            }
+        }
+        return found;
+    });
     const mockReferenceLines = selectedExercise.lines;
     const mockReferenceText = mockReferenceLines.join(' ');
 

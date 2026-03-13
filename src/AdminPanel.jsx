@@ -1,11 +1,20 @@
 import React, { useState } from 'react';
 import {
     Users, Headphones, Scale, FileText, BarChart2,
-    Settings, LogOut, Search, Plus, Edit2, Trash2
+    Settings, LogOut, Search, Plus, Edit2, Trash2, Keyboard, CheckCircle, Save
 } from 'lucide-react';
 
 const AdminPanel = ({ user, onLogout }) => {
     const [currentTab, setCurrentTab] = useState('students');
+    const [kcText, setKcText] = useState('');
+    const [kcSaved, setKcSaved] = useState(false);
+
+    const handleSaveKcData = () => {
+        if (!kcText.trim()) return;
+        localStorage.setItem('admin_kailash_data', kcText);
+        setKcSaved(true);
+        setTimeout(() => setKcSaved(false), 3000);
+    };
 
     const SidebarItem = ({ icon: Icon, label, tabId }) => (
         <div
@@ -114,21 +123,30 @@ const AdminPanel = ({ user, onLogout }) => {
                         </div>
                     </div>
                 );
-            case 'mock_tests':
+            case 'kailash':
                 return (
                     <div className="animate-in fade-in duration-300 slide-in-from-bottom-2">
                         <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold text-gray-800">Mock Tests Builder</h2>
-                            <button className="bg-[#1e3a8a] text-white px-5 py-2.5 rounded-xl flex items-center text-sm font-bold hover:bg-blue-800 transition-all shadow-md hover:-translate-y-0.5">
-                                <Plus className="w-4 h-4 mr-2" /> Load New Test
+                            <h2 className="text-2xl font-bold text-gray-800">Kailash Chandra Upload</h2>
+                            <button 
+                                onClick={handleSaveKcData}
+                                className={`px-5 py-2.5 rounded-xl flex items-center text-sm font-bold transition-all shadow-md ${kcSaved ? 'bg-green-500 text-white' : 'bg-[#1e3a8a] text-white hover:bg-blue-800 hover:-translate-y-0.5'}`}
+                            >
+                                {kcSaved ? <CheckCircle className="w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                                {kcSaved ? 'Saved to Portal!' : 'Publish to Students'}
                             </button>
                         </div>
-                        <div className="bg-white p-12 rounded-xl shadow-sm border border-gray-200 text-center text-gray-500 flex flex-col items-center justify-center">
-                            <div className="w-16 h-16 bg-blue-50 text-blue-300 rounded-full flex items-center justify-center mb-4">
-                                <FileText className="w-8 h-8" />
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                            <div className="mb-4">
+                                <label className="block text-sm font-bold text-gray-700 mb-2">Daily Dictation Text (Kailash Chandra Vol)</label>
+                                <p className="text-xs text-gray-500 mb-4">Paste the text content here. This will immediately overwrite the default Kailash Chandra test for all students.</p>
+                                <textarea
+                                    value={kcText}
+                                    onChange={(e) => setKcText(e.target.value)}
+                                    placeholder="Start typing or pasting the passage here..."
+                                    className="w-full h-[400px] p-4 text-base font-serif leading-relaxed border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a] focus:border-transparent resize-y"
+                                ></textarea>
                             </div>
-                            <h3 className="text-lg font-bold text-gray-700 mb-1">No Tests Loaded</h3>
-                            <p className="max-w-md mx-auto text-sm">Create and load comprehensive mock tests for student evaluations.</p>
                         </div>
                     </div>
                 );
@@ -220,6 +238,7 @@ const AdminPanel = ({ user, onLogout }) => {
                         <SidebarItem icon={Headphones} label="Audio Dictations" tabId="audio" />
                         <SidebarItem icon={Scale} label="High Court Data" tabId="highcourt" />
                         <SidebarItem icon={FileText} label="Load Mock Tests" tabId="mock_tests" />
+                        <SidebarItem icon={Keyboard} label="Kailash Chandra Upload" tabId="kailash" />
                         <div className="my-4 border-t border-gray-100"></div>
                         <div className="px-4 mb-4 text-xs font-black text-gray-400 uppercase tracking-wider">Reports</div>
                         <SidebarItem icon={BarChart2} label="All Student Results" tabId="results" />
