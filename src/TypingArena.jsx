@@ -334,8 +334,8 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete }) => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col p-4 md:p-8 font-sans">
-            <div className="max-w-5xl w-full mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 flex flex-col">
+        <div className="min-h-full h-full flex-1 bg-gray-50 flex flex-col p-4 md:p-8 font-sans text-lg">
+            <div className="w-full flex-1 mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 flex flex-col">
 
                 {/* Top Bar */}
                 <div className="bg-[#1e3a8a] text-white px-6 py-4 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0 shadow-md z-10">
@@ -377,23 +377,38 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete }) => {
                     </div>
                 </div>
 
-                {/* Tabs for Multiple KC Tests */}
-                {selectedExercise.id.startsWith('kc-') && availableExercises.filter(e => e.id.startsWith('kc-')).length > 1 && (
-                    <div className="bg-blue-50 border-b border-gray-200 px-6 py-3 flex space-x-3 overflow-x-auto custom-scrollbar">
-                        {availableExercises.filter(e => e.id.startsWith('kc-')).map((test) => (
-                            <button
-                                key={test.id}
-                                onClick={() => { setSelectedExercise(test); handleReset(); }}
-                                className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors shadow-sm ${selectedExercise.id === test.id ? 'bg-[#1e3a8a] text-white ring-2 ring-blue-300 ring-offset-1' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'}`}
-                            >
-                                {test.title}
-                            </button>
-                        ))}
-                    </div>
-                )}
+                {/* Content Layout */}
+                <div className="flex flex-1 overflow-hidden min-h-0">
+                    {/* Left Sidebar for KC Tests */}
+                    {selectedExercise.id.startsWith('kc-') && availableExercises.filter(e => e.id.startsWith('kc-')).length > 1 && (
+                        <div className="w-72 border-r border-gray-200 bg-white flex flex-col overflow-y-auto shrink-0 z-10 custom-scrollbar">
+                            <div className="p-4 bg-gray-50 font-bold text-gray-700 border-b sticky top-0 uppercase tracking-wider text-xs">
+                                Uploaded Tests
+                            </div>
+                            <div className="flex flex-col">
+                                {availableExercises.filter(e => e.id.startsWith('kc-')).map((test, index) => (
+                                    <button
+                                        key={test.id}
+                                        onClick={() => { setSelectedExercise(test); handleReset(); }}
+                                        className={`text-left p-4 border-b text-sm font-bold transition-colors flex flex-col ${selectedExercise.id === test.id ? 'bg-[#1e3a8a] text-white' : 'hover:bg-blue-50 text-gray-700 bg-white'}`}
+                                    >
+                                        <div className="flex justify-between items-center w-full mb-1">
+                                            <span className="truncate pr-2">{test.title.replace('Kailash Chandra Vol ', '')}</span>
+                                            {index === 0 && (
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${selectedExercise.id === test.id ? 'bg-white text-[#1e3a8a]' : 'bg-green-100 text-green-700'}`}>NEW</span>
+                                            )}
+                                        </div>
+                                        <span className={`text-xs ${selectedExercise.id === test.id ? 'text-blue-200' : 'text-gray-400'}`}>Click to start</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
-                {/* Action / Dictation Area */}
-                <div className="p-6 bg-blue-50/30 border-b border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
+                    {/* Main Arena Content */}
+                    <div className="flex-1 flex flex-col overflow-y-auto w-full relative min-h-0">
+                        {/* Action / Dictation Area */}
+                        <div className="p-6 bg-blue-50/30 border-b border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
                     <div className="flex items-center space-x-4">
                         <button
                             onClick={togglePlayPause}
@@ -439,20 +454,20 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete }) => {
                     </div>
                 </div>
 
-                <div className="flex-1 p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 custom-scrollbar">
+                <div className="flex-1 p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 custom-scrollbar min-h-0">
                     {/* Reference Text Area */}
-                    <div className="flex flex-col h-[45vh] min-h-[300px]">
+                    <div className="flex flex-col flex-1 h-full min-h-[350px]">
                         <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 shrink-0">Reference Text</h3>
                         <div 
                             ref={referenceScrollRef}
-                            className="flex-1 bg-white border border-gray-200 rounded-xl p-5 shadow-sm overflow-y-auto leading-relaxed text-lg scroll-smooth"
+                            className="flex-1 bg-white border border-gray-200 rounded-xl p-5 shadow-sm overflow-y-auto leading-relaxed text-lg scroll-smooth min-h-0"
                         >
                             {renderHighlightedText()}
                         </div>
                     </div>
 
                     {/* User Input Area */}
-                    <div className="flex flex-col h-[45vh] min-h-[300px]">
+                    <div className="flex flex-col flex-1 h-full min-h-[350px]">
                         <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 shrink-0">Your Translation</h3>
                         <textarea
                             className="flex-1 w-full bg-white border-2 border-gray-200 focus:border-[#1e3a8a] rounded-xl p-5 shadow-sm text-lg outline-none resize-none transition-colors"
@@ -472,7 +487,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete }) => {
                 </div>
 
                 {/* Bottom Actions */}
-                <div className="bg-gray-50 px-6 py-5 border-t border-gray-200 flex justify-end space-x-4">
+                <div className="bg-gray-50 px-6 py-5 border-t border-gray-200 flex justify-end space-x-4 shrink-0 mt-auto">
                     <button
                         onClick={handleReset}
                         className="px-6 py-3 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 font-bold rounded-xl transition-colors shadow-sm"
@@ -490,6 +505,8 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete }) => {
                         <CheckCircle2 className="w-5 h-5" />
                         <span>Submit Test</span>
                     </button>
+                </div>
+                    </div>
                 </div>
 
             </div>
