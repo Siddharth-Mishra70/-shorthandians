@@ -289,7 +289,7 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-100 print:bg-white">
+    <div className="h-full w-full overflow-y-auto bg-gray-100 print:bg-white">
       {/* ── Screen-only action bar ───────────────────────────── */}
       <div className="print:hidden sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">

@@ -334,8 +334,8 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete }) => {
     };
 
     return (
-        <div className="min-h-full h-full flex-1 bg-gray-50 flex flex-col p-4 md:p-8 font-sans text-lg">
-            <div className="w-full flex-1 mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 flex flex-col">
+        <div className="h-full flex-1 bg-gray-50 flex flex-col p-2 md:p-4 font-sans text-lg min-h-0 overflow-hidden">
+            <div className="w-full h-full mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 flex flex-col">
 
                 {/* Top Bar */}
                 <div className="bg-[#1e3a8a] text-white px-6 py-4 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0 shadow-md z-10">
@@ -456,7 +456,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete }) => {
 
                 <div className="flex-1 p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 custom-scrollbar min-h-0">
                     {/* Reference Text Area */}
-                    <div className="flex flex-col flex-1 h-full min-h-[350px]">
+                    <div className="flex flex-col flex-1 h-full min-h-0">
                         <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 shrink-0">Reference Text</h3>
                         <div 
                             ref={referenceScrollRef}
@@ -467,7 +467,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete }) => {
                     </div>
 
                     {/* User Input Area */}
-                    <div className="flex flex-col flex-1 h-full min-h-[350px]">
+                    <div className="flex flex-col flex-1 h-full min-h-0">
                         <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 shrink-0">Your Translation</h3>
                         <textarea
                             className="flex-1 w-full bg-white border-2 border-gray-200 focus:border-[#1e3a8a] rounded-xl p-5 shadow-sm text-lg outline-none resize-none transition-colors"
