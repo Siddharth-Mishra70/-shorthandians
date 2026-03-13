@@ -1,0 +1,497 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Play, Pause, RotateCcw, Volume2, FastForward, Clock, Activity, CheckCircle2, Share2, X, FileCheck } from 'lucide-react';
+import { supabase } from './supabaseClient';
+
+const mockExercises = [
+    {
+        id: 'kc-1',
+        title: 'Kailash Chandra Vol 1',
+        lines: [
+            "Welcome to Shorthandians.",
+            "This is a highly interactive practice arena where you can test your dictation transcription skills.",
+            "You must be accurate and fast to pass this exam.",
+            "Best of luck to all the candidates preparing for the High Court formatting and other specialized tests."
+        ]
+    },
+    {
+        id: 'ssc-cd',
+        title: 'SSC Grade C & D',
+        lines: [
+            "The selection process for SSC Grade C demands an error free transcript.",
+            "Punctuation rules are strictly enforced during the skill test.",
+            "A speed of hundred words per minute is expected from all participating candidates.",
+            "Continuous practice will gradually improve your overall consistency."
+        ]
+    }
+];
+
+const TypingArena = ({ initialCourse = 'kc-1' }) => {
+    const [selectedExercise, setSelectedExercise] = useState(() => 
+        mockExercises.find(e => e.title.includes(initialCourse) || e.id === initialCourse) || mockExercises[0]
+    );
+    const mockReferenceLines = selectedExercise.lines;
+    const mockReferenceText = mockReferenceLines.join(' ');
+
+    const [inputText, setInputText] = useState('');
+    const [isStarted, setIsStarted] = useState(false);
+    const [timeLeft, setTimeLeft] = useState(600); // 10 minutes = 600 seconds
+    const [wpm, setWpm] = useState(0);
+    const [accuracy, setAccuracy] = useState(100);
+
+    // Audio Player State
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+    const [audioProgress, setAudioProgress] = useState(0);
+    const utteranceRef = useRef(null);
+
+    const [showModal, setShowModal] = useState(false);
+    const [finalStats, setFinalStats] = useState(null);
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Timer logic
+    useEffect(() => {
+        let timer;
+        if (isStarted && timeLeft > 0) {
+            timer = setInterval(() => {
+                setTimeLeft((prev) => prev - 1);
+            }, 1000);
+        } else if (timeLeft === 0) {
+            clearInterval(timer);
+        }
+        return () => clearInterval(timer);
+    }, [isStarted, timeLeft]);
+
+    // Statistics calculation
+    useEffect(() => {
+        if (!isStarted || inputText.length === 0) return;
+
+        const timeElapsed = (600 - timeLeft) / 60; // in minutes
+        if (timeElapsed > 0) {
+            const wordsTyped = inputText.trim().split(/\s+/).length;
+            const currentWPM = Math.round(wordsTyped / timeElapsed);
+            setWpm(currentWPM);
+        }
+
+        // Accuracy Calculation
+        const refWords = mockReferenceText.split(' ');
+        const typedWords = inputText.trim().split(/\s+/);
+        let correctWords = 0;
+
+        typedWords.forEach((word, index) => {
+            if (word === refWords[index]) {
+                correctWords++;
+            }
+        });
+
+        const currAccuracy = typedWords.length > 0
+            ? Math.round((correctWords / typedWords.length) * 100)
+            : 100;
+        setAccuracy(currAccuracy);
+
+    }, [inputText, timeLeft, isStarted]);
+
+    const handleInputChange = (e) => {
+        if (!isStarted) {
+            setIsStarted(true);
+        }
+        setInputText(e.target.value);
+    };
+
+    const handleReset = () => {
+        setInputText('');
+        setIsStarted(false);
+        setTimeLeft(600);
+        setWpm(0);
+        setAccuracy(100);
+        setIsPlaying(false);
+    };
+
+    const calculateFinalStats = () => {
+        const refWords = mockReferenceLines.join(' ').split(' ');
+        const typedWords = inputText.trim().split(/\s+/).filter(w => w !== '');
+
+        let fullMistakes = 0;
+        let halfMistakes = 0;
+
+        refWords.forEach((refWord, index) => {
+            const typedWord = typedWords[index] || '';
+            if (typedWord === refWord) return;
+            if (!typedWord) {
+                fullMistakes++;
+                return;
+            }
+
+            const cleanRef = refWord.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").toLowerCase();
+            const cleanTyped = typedWord.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").toLowerCase();
+
+            if (cleanRef === cleanTyped) halfMistakes++;
+            else fullMistakes++;
+        });
+
+        if (typedWords.length > refWords.length) {
+            fullMistakes += (typedWords.length - refWords.length);
+        }
+
+        const timeElapsedMin = (600 - timeLeft) / 60;
+        const validTime = timeElapsedMin > 0 ? timeElapsedMin : 1;
+
+        const totalWords = typedWords.length;
+
+        // Final WPM formula: (Total Words - Full Mistakes - (Half Mistakes * 0.5)) / Time
+        const deduction = fullMistakes + (halfMistakes * 0.5);
+        let finalWpm = (totalWords - deduction) / validTime;
+        finalWpm = Math.max(0, Math.round(finalWpm));
+
+        // Final accuracy 
+        let finalAcc = 100;
+        if (refWords.length > 0) {
+            finalAcc = Math.max(0, Math.round(((refWords.length - deduction) / refWords.length) * 100));
+        }
+
+        return { wpm: finalWpm, accuracy: finalAcc, fullMistakes, halfMistakes, totalWords };
+    };
+
+    const handleSubmit = async () => {
+        setIsStarted(false);
+        resetAudio();
+
+        const stats = calculateFinalStats();
+        setFinalStats(stats);
+        setShowModal(true);
+        setIsSaving(true);
+
+        try {
+            // Write to Supabase using mock UUID
+            const { error } = await supabase
+                .from('test_results')
+                .insert([
+                    {
+                        user_id: '00000000-0000-0000-0000-000000000000',
+                        exercise_name: 'Kailash Chandra Vol 1',
+                        wpm: stats.wpm,
+                        accuracy: stats.accuracy,
+                        mistakes: stats.fullMistakes + Math.ceil(stats.halfMistakes * 0.5),
+                        total_words: stats.totalWords,
+                        created_at: new Date().toISOString()
+                    }
+                ]);
+            if (error) console.error("Supabase Warning:", error.message);
+        } catch (error) {
+            console.error('Error saving stats:', error);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleWhatsAppShare = () => {
+        const text = `Hi Ayush Sir, I've just submitted my Shorthandians mock test.\n\n*Exercise:* Kailash Chandra Vol 1\n*WPM:* ${finalStats?.wpm}\n*Accuracy:* ${finalStats?.accuracy}%\n*Full Mistakes:* ${finalStats?.fullMistakes}\n*Half Mistakes:* ${finalStats?.halfMistakes}\n\nPlease review my performance. Thank you!`;
+        window.open(`https://wa.me/917080811235?text=${encodeURIComponent(text)}`, '_blank');
+    };
+
+    const formatTime = (seconds) => {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    };
+
+    useEffect(() => {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+            const u = new SpeechSynthesisUtterance(mockReferenceText);
+            u.lang = 'en-US';
+            u.rate = playbackSpeed;
+            u.onboundary = (e) => {
+                const progress = (e.charIndex / mockReferenceText.length) * 100;
+                setAudioProgress(progress);
+            };
+            u.onend = () => {
+                setIsPlaying(false);
+                setAudioProgress(100);
+            };
+            u.onerror = () => setIsPlaying(false);
+            utteranceRef.current = u;
+        }
+        return () => window.speechSynthesis?.cancel();
+    }, [mockReferenceText, playbackSpeed]);
+
+    const togglePlayPause = () => {
+        if (!utteranceRef.current) return;
+
+        if (isPlaying) {
+            window.speechSynthesis.pause();
+            setIsPlaying(false);
+        } else {
+            if (window.speechSynthesis.paused) {
+                window.speechSynthesis.resume();
+            } else {
+                window.speechSynthesis.cancel();
+                utteranceRef.current.rate = playbackSpeed;
+                window.speechSynthesis.speak(utteranceRef.current);
+            }
+            setIsPlaying(true);
+        }
+    };
+
+    const resetAudio = () => {
+        window.speechSynthesis?.cancel();
+        setIsPlaying(false);
+        setAudioProgress(0);
+    };
+
+    const changeSpeed = (rate) => {
+        setPlaybackSpeed(rate);
+        if (utteranceRef.current) {
+            utteranceRef.current.rate = rate;
+            if (isPlaying) {
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(utteranceRef.current);
+            }
+        }
+    };
+
+    // Word Highlight Logic
+    const renderHighlightedText = () => {
+        const inputWords = inputText ? inputText.split(' ') : [];
+        const isLastWordInProgress = inputText && !inputText.endsWith(' ');
+        const typedWords = isLastWordInProgress ? inputWords.slice(0, -1) : inputWords.filter(w => w !== '');
+        const currentTypingWord = isLastWordInProgress ? inputWords[inputWords.length - 1] : '';
+
+        let globalIndex = 0;
+
+        return mockReferenceLines.map((line, lineIndex) => {
+            const lineWords = line.split(' ');
+            return (
+                <div key={lineIndex} className="mb-4 leading-relaxed font-medium">
+                    {lineWords.map((word, wordIdx) => {
+                        const index = globalIndex++;
+                        let colorClass = "text-gray-700";
+
+                        if (index < typedWords.length) {
+                            if (typedWords[index] === word) {
+                                colorClass = "text-green-600 bg-green-50 font-bold";
+                            } else {
+                                colorClass = "text-red-600 bg-red-50 line-through decoration-red-400";
+                            }
+                        } else if (index === typedWords.length && isLastWordInProgress) {
+                            if (word.startsWith(currentTypingWord)) {
+                                colorClass = "text-blue-600 border-b-2 border-blue-400";
+                            } else {
+                                colorClass = "text-red-500 underline decoration-wavy";
+                            }
+                        }
+                        return (
+                            <span key={index} className={`mr-2 px-[2px] rounded ${colorClass}`}>
+                                {word}
+                            </span>
+                        );
+                    })}
+                </div>
+            );
+        });
+    };
+
+    return (
+        <div className="min-h-screen bg-gray-50 flex flex-col p-4 md:p-8 font-sans">
+            <div className="max-w-5xl w-full mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 flex flex-col">
+
+                {/* Top Bar */}
+                <div className="bg-[#1e3a8a] text-white px-6 py-4 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0 shadow-md z-10">
+                    <div className="flex items-center space-x-3">
+                        <h2 className="text-xl font-bold tracking-wide">Exercise:</h2>
+                        <select
+                            className="bg-blue-800/50 text-white text-sm font-bold px-3 py-1.5 rounded-lg outline-none border border-blue-700 focus:border-blue-400"
+                            value={selectedExercise.id}
+                            onChange={(e) => {
+                                const ex = mockExercises.find(x => x.id === e.target.value);
+                                setSelectedExercise(ex);
+                                handleReset();
+                            }}
+                            disabled={isStarted}
+                        >
+                            {mockExercises.map(ex => (
+                                <option key={ex.id} value={ex.id} className="bg-white text-gray-900">{ex.title}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex items-center space-x-6 text-sm md:text-base font-semibold">
+                        <div className="flex items-center space-x-2 bg-blue-800/50 px-4 py-2 rounded-lg">
+                            <Clock className="w-5 h-5 text-blue-200" />
+                            <span className={`tracking-wider ${timeLeft <= 60 ? 'text-red-300 animate-pulse' : ''}`}>
+                                {formatTime(timeLeft)}
+                            </span>
+                        </div>
+
+                        <div className="flex items-center space-x-2 bg-blue-800/50 px-4 py-2 rounded-lg">
+                            <Activity className="w-5 h-5 text-blue-200" />
+                            <span>{Math.max(0, wpm)} WPM</span>
+                        </div>
+
+                        <div className="flex items-center space-x-2 bg-blue-800/50 px-4 py-2 rounded-lg">
+                            <CheckCircle2 className="w-5 h-5 text-blue-200" />
+                            <span>{accuracy}% Acc</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Action / Dictation Area */}
+                <div className="p-6 bg-blue-50/30 border-b border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center space-x-4">
+                        <button
+                            onClick={togglePlayPause}
+                            className="w-12 h-12 bg-[#1e3a8a] hover:bg-blue-800 text-white rounded-full flex items-center justify-center shadow-md transition-transform active:scale-95"
+                        >
+                            {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
+                        </button>
+                        <button
+                            onClick={resetAudio}
+                            className="w-10 h-10 bg-white border border-gray-300 text-gray-600 hover:text-[#1e3a8a] hover:border-[#1e3a8a] rounded-full flex items-center justify-center shadow-sm transition-colors"
+                            title="Restart Audio"
+                        >
+                            <RotateCcw className="w-5 h-5" />
+                        </button>
+                        <div className="flex flex-col ml-4">
+                            <span className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Audio Dictation</span>
+                            <div className="w-48 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-[#1e3a8a] transition-all duration-100 ease-linear"
+                                    style={{ width: `${audioProgress}%` }}
+                                ></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Speed Controller */}
+                    <div className="flex items-center bg-white border border-gray-200 rounded-xl shadow-sm p-1">
+                        <Volume2 className="w-4 h-4 text-gray-400 mx-2" />
+                        <div className="flex space-x-1 border-l border-gray-100 pl-2">
+                            {[0.7, 0.8, 1.0, 1.2].map(speed => (
+                                <button
+                                    key={speed}
+                                    onClick={() => changeSpeed(speed)}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${playbackSpeed === speed
+                                        ? 'bg-[#1e3a8a] text-white shadow-sm'
+                                        : 'text-gray-600 hover:bg-gray-100'
+                                        }`}
+                                >
+                                    {speed}x
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex-1 p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 custom-scrollbar">
+                    {/* Reference Text Area */}
+                    <div className="flex flex-col">
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Reference Text</h3>
+                        <div className="flex-1 bg-white border border-gray-200 rounded-xl p-5 shadow-sm overflow-y-auto leading-relaxed text-lg min-h-[300px]">
+                            {renderHighlightedText()}
+                        </div>
+                    </div>
+
+                    {/* User Input Area */}
+                    <div className="flex flex-col">
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Your Translation</h3>
+                        <textarea
+                            className="flex-1 w-full bg-white border-2 border-gray-200 focus:border-[#1e3a8a] rounded-xl p-5 shadow-sm text-lg outline-none resize-none transition-colors min-h-[300px]"
+                            placeholder="Start typing here... (Timer will start on your first keystroke)"
+                            value={inputText}
+                            onChange={handleInputChange}
+                            onCopy={(e) => { e.preventDefault(); alert("Copying is disabled!"); }}
+                            onPaste={(e) => { e.preventDefault(); alert("Pasting is disabled!"); }}
+                            onContextMenu={(e) => { e.preventDefault(); }}
+                            disabled={timeLeft === 0}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck="false"
+                        />
+                    </div>
+                </div>
+
+                {/* Bottom Actions */}
+                <div className="bg-gray-50 px-6 py-5 border-t border-gray-200 flex justify-end space-x-4">
+                    <button
+                        onClick={handleReset}
+                        className="px-6 py-3 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 font-bold rounded-xl transition-colors shadow-sm"
+                    >
+                        Reset Practice
+                    </button>
+                    <button
+                        onClick={handleSubmit}
+                        disabled={!isStarted && inputText.length === 0}
+                        className={`px-8 py-3 font-bold rounded-xl transition-transform shadow-md flex items-center space-x-2 ${(!isStarted && inputText.length === 0)
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-green-600 hover:bg-green-700 text-white transform hover:scale-105'
+                            }`}
+                    >
+                        <CheckCircle2 className="w-5 h-5" />
+                        <span>Submit Test</span>
+                    </button>
+                </div>
+
+            </div>
+
+            {/* Results Modal */}
+            {showModal && finalStats && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl overflow-hidden w-full max-w-md animate-in fade-in zoom-in duration-300">
+                        <div className="bg-[#1e3a8a] py-6 px-6 text-center text-white relative">
+                            <button onClick={() => setShowModal(false)} className="absolute top-4 right-4 text-blue-200 hover:text-white">
+                                <X className="w-6 h-6" />
+                            </button>
+                            <FileCheck className="w-16 h-16 mx-auto mb-3 text-blue-100" />
+                            <h2 className="text-2xl font-black">Test Submitted!</h2>
+                            <p className="text-blue-200 font-medium tracking-wide">Detailed Result Analysis</p>
+                        </div>
+
+                        <div className="p-6">
+                            <div className="grid grid-cols-2 gap-4 mb-6">
+                                <div className="bg-gray-50 p-4 rounded-xl text-center border border-gray-100">
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Final WPM</span>
+                                    <span className="text-3xl font-black text-[#1e3a8a]">{finalStats.wpm}</span>
+                                </div>
+                                <div className="bg-gray-50 p-4 rounded-xl text-center border border-gray-100">
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Accuracy</span>
+                                    <span className="text-3xl font-black text-green-600">{finalStats.accuracy}%</span>
+                                </div>
+                                <div className="bg-red-50 p-4 rounded-xl text-center border border-red-100">
+                                    <span className="text-xs font-bold text-red-400 uppercase tracking-widest block mb-1">Full Mistakes</span>
+                                    <span className="text-2xl font-bold text-red-600">{finalStats.fullMistakes}</span>
+                                </div>
+                                <div className="bg-amber-50 p-4 rounded-xl text-center border border-amber-100">
+                                    <span className="text-xs font-bold text-amber-500 uppercase tracking-widest block mb-1">Half Mistakes</span>
+                                    <span className="text-2xl font-bold text-amber-600">{finalStats.halfMistakes}</span>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col space-y-3">
+                                {isSaving ? (
+                                    <div className="text-center text-gray-400 font-bold text-sm py-2">Saving to Database...</div>
+                                ) : (
+                                    <>
+                                        <button
+                                            onClick={handleWhatsAppShare}
+                                            className="w-full py-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl flex items-center justify-center space-x-2 shadow-md transition-colors"
+                                        >
+                                            <Share2 className="w-5 h-5" />
+                                            <span>Share on WhatsApp</span>
+                                        </button>
+                                        <button
+                                            onClick={() => { setShowModal(false); handleReset(); }}
+                                            className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors"
+                                        >
+                                            Close & Retry
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default TypingArena;
