@@ -147,6 +147,10 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack }) => {
   const [liveData,  setLiveData]  = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [loading,   setLoading]   = useState(!!attemptId);
+  const [history,   setHistory]   = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const MOCK_USER_ID = '00000000-0000-0000-0000-000000000000';
 
   // ── Fetch real attempt from Supabase if attemptId is given ──
   useEffect(() => {
@@ -183,6 +187,18 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack }) => {
       })
       .finally(() => setLoading(false));
   }, [attemptId]);
+
+  // ── Fetch History ──
+  useEffect(() => {
+    setLoadingHistory(true);
+    // In a real app, use the actual logged-in user's ID
+    import('./lib/saveTestResult').then(({ fetchAllResults }) => {
+        fetchAllResults(supabase, MOCK_USER_ID)
+          .then(setHistory)
+          .catch(err => console.error("History fetch error:", err))
+          .finally(() => setLoadingHistory(false));
+    });
+  }, [attemptId]); // Refresh history when a new test is completed
 
   // resolved data: live DB row > prop > demo
   const data = liveData ?? propData ?? DEMO_DATA;
@@ -462,6 +478,55 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack }) => {
               originalText={data.original}
               exerciseTitle={data.exercise}
             />
+          </div>
+
+          {/* ── Test History (screen only) ────────────────────── */}
+          <div className="print:hidden border-t border-gray-100 pt-8">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-sm font-black text-gray-500 uppercase tracking-widest">
+                  📜 Your Performance History
+                </h2>
+                <p className="text-xs text-gray-400 font-medium">Review your past test attempts and growth</p>
+              </div>
+              <span className="bg-blue-50 text-[#1e3a8a] text-xs font-black px-3 py-1 rounded-full border border-blue-100">
+                {history.length} Attempts
+              </span>
+            </div>
+
+            {loadingHistory ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="w-6 h-6 text-gray-300 animate-spin" />
+              </div>
+            ) : history.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {history.map((h) => (
+                  <div key={h.id} className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex items-center justify-between group hover:bg-white hover:border-blue-200 hover:shadow-md transition-all">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-10 h-10 bg-white rounded-xl border border-gray-100 flex items-center justify-center text-[#1e3a8a] font-black shadow-sm group-hover:bg-blue-50">
+                        {h.wpm}
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-gray-800">{h.exercise_id}</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">
+                          {new Date(h.created_at).toLocaleDateString()} • {h.accuracy}% Acc
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                       onClick={() => window.location.hash = `#results:${h.id}`} // Dummy logic, in real use we pass ID up
+                       className="p-2 text-gray-400 hover:text-[#1e3a8a] transition-colors"
+                    >
+                      <ArrowLeft className="w-4 h-4 rotate-180" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                <p className="text-gray-400 text-sm font-medium">No past results found.</p>
+              </div>
+            )}
           </div>
 
           {/* ── Footer ──────────────────────────────────────── */}

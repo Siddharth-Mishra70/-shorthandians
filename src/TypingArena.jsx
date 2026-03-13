@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw, Volume2, FastForward, Clock, Activity, CheckCircle2, Share2, X, FileCheck } from 'lucide-react';
 import { supabase } from './supabaseClient';
+import { saveTestResult } from './lib/saveTestResult';
 
 const mockExercises = [
     {
@@ -25,7 +26,7 @@ const mockExercises = [
     }
 ];
 
-const TypingArena = ({ initialCourse = 'kc-1' }) => {
+const TypingArena = ({ initialCourse = 'kc-1', onTestComplete }) => {
     const [selectedExercise, setSelectedExercise] = useState(() => 
         mockExercises.find(e => e.title.includes(initialCourse) || e.id === initialCourse) || mockExercises[0]
     );
@@ -47,6 +48,7 @@ const TypingArena = ({ initialCourse = 'kc-1' }) => {
     const [showModal, setShowModal] = useState(false);
     const [finalStats, setFinalStats] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [attemptId, setAttemptId] = useState(null);
 
     // Timer logic
     useEffect(() => {
@@ -161,21 +163,16 @@ const TypingArena = ({ initialCourse = 'kc-1' }) => {
         setIsSaving(true);
 
         try {
-            // Write to Supabase using mock UUID
-            const { error } = await supabase
-                .from('test_results')
-                .insert([
-                    {
-                        user_id: '00000000-0000-0000-0000-000000000000',
-                        exercise_name: 'Kailash Chandra Vol 1',
-                        wpm: stats.wpm,
-                        accuracy: stats.accuracy,
-                        mistakes: stats.fullMistakes + Math.ceil(stats.halfMistakes * 0.5),
-                        total_words: stats.totalWords,
-                        created_at: new Date().toISOString()
-                    }
-                ]);
-            if (error) console.error("Supabase Warning:", error.message);
+            const { attemptId: newId } = await saveTestResult(supabase, {
+                userId: '00000000-0000-0000-0000-000000000000', // Mock UUID
+                exerciseId: selectedExercise.title,
+                wpm: stats.wpm,
+                accuracy: stats.accuracy,
+                attemptedText: inputText,
+                originalText: mockReferenceText,
+                mistakesCount: stats.fullMistakes + Math.ceil(stats.halfMistakes * 0.5)
+            });
+            setAttemptId(newId);
         } catch (error) {
             console.error('Error saving stats:', error);
         } finally {
@@ -470,6 +467,14 @@ const TypingArena = ({ initialCourse = 'kc-1' }) => {
                                     <div className="text-center text-gray-400 font-bold text-sm py-2">Saving to Database...</div>
                                 ) : (
                                     <>
+                                        <button
+                                            onClick={() => onTestComplete?.(attemptId)}
+                                            disabled={!attemptId}
+                                            className={`w-full py-3 bg-[#1e3a8a] hover:bg-blue-800 text-white font-black rounded-xl flex items-center justify-center space-x-2 shadow-md transition-all ${!attemptId ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'}`}
+                                        >
+                                            <TrendingUp className="w-5 h-5" />
+                                            <span>View Detailed Analysis</span>
+                                        </button>
                                         <button
                                             onClick={handleWhatsAppShare}
                                             className="w-full py-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl flex items-center justify-center space-x-2 shadow-md transition-colors"

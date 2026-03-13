@@ -112,3 +112,29 @@ export async function fetchTestResult(supabase, attemptId) {
 
   return data;
 }
+
+/**
+ * fetchAllResults
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Fetches all attempts for a specific user.
+ *
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {string} userId
+ * @returns {Promise<Array>}
+ */
+export async function fetchAllResults(supabase, userId) {
+  if (!userId) throw new Error('fetchAllResults: userId is required.');
+
+  const { data, error } = await supabase
+    .from('TestAttempts')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('[fetchAllResults] Supabase error:', error);
+    throw new Error(error.message || 'Failed to fetch results history.');
+  }
+
+  return data;
+}

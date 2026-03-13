@@ -95,6 +95,8 @@ function App() {
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false); // Login Required popup
   const [pendingView, setPendingView] = useState(null);      // where to go after login
+  const [arenaTab, setArenaTab] = useState('transcribe');     // 'transcribe' | 'analysis'
+  const [lastAttemptId, setLastAttemptId] = useState(null);
 
   // Navigate to a specific attempt result page after saving
   const navigateToResult = (attemptId) => {
@@ -161,15 +163,66 @@ function App() {
   // ── Course Sub-views (Protected) ──────────────────────────
   if (currentView === 'arena') {
     return (
-      <div className="relative">
-        <button
-          onClick={() => setCurrentView('dashboard')}
-          className="absolute top-6 left-6 z-50 bg-white border-2 border-[#1e3a8a] text-[#1e3a8a] px-4 py-2 rounded-lg font-bold shadow-md hover:bg-blue-50 transition-colors flex items-center space-x-2"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Dashboard</span>
-        </button>
-        <TypingArena initialCourse={currentViewData?.title || 'Kailash Chandra'} />
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        {/* Arena Header with Tabs */}
+        <div className="bg-white border-b shadow-sm sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
+            <button
+              onClick={() => {
+                setCurrentView('dashboard');
+                setArenaTab('transcribe');
+              }}
+              className="flex items-center space-x-2 text-[#1e3a8a] font-bold hover:text-blue-800 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="hidden sm:inline">Back to Dashboard</span>
+              <span className="sm:hidden text-xs">Back</span>
+            </button>
+
+            {/* Tab Switcher */}
+            <div className="flex bg-gray-100 p-1 rounded-xl">
+              <button
+                onClick={() => setArenaTab('transcribe')}
+                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                  arenaTab === 'transcribe'
+                    ? 'bg-white text-[#1e3a8a] shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Dictation Arena
+              </button>
+              <button
+                onClick={() => setArenaTab('analysis')}
+                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                  arenaTab === 'analysis'
+                    ? 'bg-white text-[#1e3a8a] shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Result Analysis
+              </button>
+            </div>
+
+            <div className="w-10 opacity-0 pointer-events-none" /> {/* Spacer */}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {arenaTab === 'transcribe' ? (
+            <TypingArena
+              initialCourse={currentViewData?.title || 'Kailash Chandra'}
+              onTestComplete={(id) => {
+                setLastAttemptId(id);
+                setArenaTab('analysis');
+              }}
+            />
+          ) : (
+            <ResultAnalysisPage
+              attemptId={lastAttemptId}
+              onBack={() => setArenaTab('transcribe')}
+            />
+          )}
+        </div>
       </div>
     );
   }
@@ -179,7 +232,66 @@ function App() {
   }
 
   if (currentView === 'pitman') {
-    return <PitmanAPSModule onBack={() => setCurrentView('dashboard')} />;
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        <div className="bg-white border-b shadow-sm sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
+            <button
+              onClick={() => {
+                setCurrentView('dashboard');
+                setArenaTab('transcribe');
+              }}
+              className="flex items-center space-x-2 text-[#1e3a8a] font-bold hover:text-blue-800 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="hidden sm:inline">Back to Dashboard</span>
+              <span className="sm:hidden text-xs">Back</span>
+            </button>
+
+            <div className="flex bg-gray-100 p-1 rounded-xl">
+              <button
+                onClick={() => setArenaTab('transcribe')}
+                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                  arenaTab === 'transcribe'
+                    ? 'bg-white text-[#1e3a8a] shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Dictation Arena
+              </button>
+              <button
+                onClick={() => setArenaTab('analysis')}
+                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                  arenaTab === 'analysis'
+                    ? 'bg-white text-[#1e3a8a] shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Result Analysis
+              </button>
+            </div>
+            <div className="w-10 opacity-0 pointer-events-none" />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {arenaTab === 'transcribe' ? (
+            <PitmanAPSModule
+              onBack={() => setCurrentView('dashboard')}
+              onTestComplete={(id) => {
+                setLastAttemptId(id);
+                setArenaTab('analysis');
+              }}
+            />
+          ) : (
+            <ResultAnalysisPage
+              attemptId={lastAttemptId}
+              onBack={() => setArenaTab('transcribe')}
+            />
+          )}
+        </div>
+      </div>
+    );
   }
 
   // ── Result Analysis Page (Protected) ─────────────────────
