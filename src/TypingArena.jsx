@@ -37,6 +37,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
     const [dbExerciseId, setDbExerciseId] = useState(null);   // real UUID from Supabase
     const [viewMode, setViewMode] = useState('selection'); // 'selection' | 'practice'
     const [activeDateTab, setActiveDateTab] = useState('Today');
+    const [prepCountdown, setPrepCountdown] = useState(null);
 
 
     // ── Fetch exercises from Supabase on mount ─────────────────────────────────
@@ -72,6 +73,18 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                             lines: (item.text || item.original_text || '').split('\n').filter(line => line.trim() !== '')
                         }));
                     }
+
+                    const storedComp = localStorage.getItem('admin_comprehension_data_list');
+                    let localComp = [];
+                    if (storedComp) {
+                        const list = JSON.parse(storedComp);
+                        localComp = list.map((item, idx) => ({
+                            id: item.id || `comp-local-${idx + 1}`,
+                            title: item.title || `Comprehension #${list.length - idx}`,
+                            category: 'comprehension',
+                            lines: (item.text || item.original_text || '').split('\n').filter(line => line.trim() !== '')
+                        }));
+                    }
                     
                     const storedAudio = localStorage.getItem('admin_published_audio_list');
                     let localAudio = [];
@@ -94,7 +107,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                             m.category = 'audio';
                         }
                         return m;
-                    }), ...localKc, ...localAudio];
+                    }), ...localKc, ...localAudio, ...localComp];
 
                     // DEDUPLICATE by ID before setting state to avoid "duplicate key" react error
                     const uniqueMap = new Map();
@@ -147,6 +160,8 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
         }
 
         const isAudioView = targetCourseId === 'audio-dict' || targetCourseId === 'arena-audio';
+        const isCompView = targetCourseId === 'comprehension' || targetCourseId === 'arena-comp';
+        
         if (isAudioView || selectedExercise?.id === 'audio-dict') {
             const audios = availableExercises.filter(e => e.category === 'audio');
             if (audios.length > 0) {
@@ -158,6 +173,16 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                     handleReset();
                 }
             }
+        } else if (isCompView || selectedExercise?.id === 'comprehension' || selectedExercise?.id === 'arena-comp') {
+             const comps = availableExercises.filter(e => e.category === 'comprehension');
+             if (comps.length > 0) {
+                 const target = comps[0];
+                 if (selectedExercise?.id !== target.id) {
+                     setSelectedExercise(target);
+                     setDbExerciseId(target.id.startsWith('comp-local') ? null : target.id);
+                     handleReset();
+                 }
+             }
         } else {
             const found = availableExercises.find(e => e.id === targetCourseId || e.title.includes(targetCourseId));
             if (found && selectedExercise?.id !== found.id) {
@@ -179,7 +204,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
 
         const categories = { 'Today': [], 'Yesterday': [], 'All Practice': [] };
         
-        const currentCategory = selectedExercise?.category || (initialCourse === 'arena-audio' ? 'audio' : 'kailash');
+        const currentCategory = selectedExercise?.category || (initialCourse === 'arena-audio' ? 'audio' : (initialCourse === 'arena-comp' ? 'comprehension' : 'kailash'));
         const list = availableExercises.filter(e => e.category === currentCategory || (currentCategory === 'kailash' && e.id.startsWith('kc-')));
 
         list.forEach(ex => {
@@ -234,6 +259,19 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
         }
         return () => clearInterval(timer);
     }, [isStarted, timeLeft]);
+
+    // Preparation Countdown Logic
+    useEffect(() => {
+        let prepTimer;
+        if (prepCountdown !== null && prepCountdown > 0) {
+            prepTimer = setInterval(() => {
+                setPrepCountdown(prev => prev - 1);
+            }, 1000);
+        } else if (prepCountdown === 0) {
+            setPrepCountdown(null);
+        }
+        return () => clearInterval(prepTimer);
+    }, [prepCountdown]);
 
     // Statistics calculation
     useEffect(() => {
@@ -525,7 +563,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
     // ── Main Selection UI ───────────────────────────────────────
     if (viewMode === 'selection') {
         const activeList = groupedTests[activeDateTab] || [];
-        const moduleTitle = selectedExercise?.category === 'audio' ? 'Audio Dictation' : 'Comprehension Mastery';
+        const moduleTitle = selectedExercise?.category === 'audio' ? 'Audio Dictation' : (selectedExercise?.category === 'comprehension' ? 'Comprehension Mastery' : 'Kailash Chandra Mastery');
         
         return (
             <div className="h-full flex-1 bg-[#f8fafc] flex flex-col p-4 md:p-8 overflow-y-auto no-scrollbar">
@@ -565,7 +603,10 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                                     key={test.id}
                                     onClick={() => {
                                         const t = {...test};
-                                        if (t.category === 'audio') t.isAudioCourse = true;
+                                        if (t.category === 'audio') {
+                                            t.isAudioCourse = true;
+                                            setPrepCountdown(10);
+                                        }
                                         setSelectedExercise(t);
                                         setDbExerciseId(t.id.startsWith('kc-') ? null : t.id);
                                         setViewMode('practice');
@@ -621,14 +662,31 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
     }
 
     return (
-        <div className="h-full flex-1 bg-gray-50 flex flex-col p-2 md:p-4 font-sans text-lg min-h-0 overflow-hidden">
+        <div className="h-full flex-1 bg-gray-50 flex flex-col p-2 md:p-4 font-sans text-lg min-h-0 overflow-hidden relative">
+            {/* Preparation Countdown Overlay */}
+            {prepCountdown !== null && (
+                <div className="fixed inset-0 z-[200] bg-[#1e3a8a]/95 flex flex-col items-center justify-center text-white backdrop-blur-md">
+                    <div className="text-center animate-in zoom-in duration-300">
+                        <h2 className="text-4xl font-black mb-8 tracking-widest uppercase">Get Ready!</h2>
+                        <div className="relative w-48 h-48 flex items-center justify-center">
+                            <svg className="absolute inset-0 w-full h-full -rotate-90">
+                                <circle cx="96" cy="96" r="88" fill="none" stroke="white" strokeWidth="4" strokeOpacity="0.2" />
+                                <circle cx="96" cy="96" r="88" fill="none" stroke="white" strokeWidth="8" strokeDasharray={2 * Math.PI * 88} strokeDashoffset={(2 * Math.PI * 88) * (1 - prepCountdown / 10)} strokeLinecap="round" className="transition-all duration-1000 ease-linear" />
+                            </svg>
+                            <span className="text-7xl font-black">{prepCountdown}</span>
+                        </div>
+                        <p className="mt-8 text-xl font-bold text-blue-100">Preparing your Audio Dictation...</p>
+                        <button onClick={() => setPrepCountdown(null)} className="mt-12 px-8 py-3 bg-white/10 hover:bg-white/20 border border-white/30 rounded-2xl text-sm font-black uppercase tracking-widest transition-all">Skip Preparation</button>
+                    </div>
+                </div>
+            )}
             <button 
                 onClick={() => setViewMode('selection')}
                 className="absolute top-4 left-4 z-[100] bg-white border border-gray-200 px-4 py-2 rounded-xl text-xs font-black text-[#1e3a8a] shadow-sm hover:bg-blue-50 transition-all flex items-center gap-2"
             >
                 <ArrowLeft className="w-3 h-3" /> Change Exercise
             </button>
-            <div className="w-full h-full mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 flex flex-col relative">
+            <div className="w-full h-full max-w-[1440px] mx-auto bg-white md:rounded-2xl shadow-xl overflow-hidden border border-gray-100 flex flex-col relative transition-all duration-300">
 
                 {/* Top Bar */}
                 <div className="bg-[#1e3a8a] text-white px-6 py-4 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0 shadow-md shrink-0">
@@ -695,7 +753,10 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                                         key={test.id}
                                         onClick={() => { 
                                             const t = {...test};
-                                            if (t.category === 'audio') t.isAudioCourse = true;
+                                            if (t.category === 'audio') {
+                                                t.isAudioCourse = true;
+                                                setPrepCountdown(10);
+                                            }
                                             setSelectedExercise(t); 
                                             handleReset(); 
                                         }}
@@ -715,53 +776,56 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                     )}
 
                     {/* Main Arena Content */}
-                    <div className="flex-1 flex flex-col overflow-y-auto w-full relative min-h-0">
-                        {/* Action / Dictation Area */}
-                        <div className="p-6 bg-blue-50/30 border-b border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
-                            <div className="flex items-center space-x-4">
-                                <button
-                                    onClick={togglePlayPause}
-                                    className="w-12 h-12 bg-[#1e3a8a] hover:bg-blue-800 text-white rounded-full flex items-center justify-center shadow-md transition-transform active:scale-95"
-                                >
-                                    {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
-                                </button>
-                                <button
-                                    onClick={resetAudio}
-                                    className="w-10 h-10 bg-white border border-gray-300 text-gray-600 hover:text-[#1e3a8a] hover:border-[#1e3a8a] rounded-full flex items-center justify-center shadow-sm transition-colors"
-                                    title="Restart Audio"
-                                >
-                                    <RotateCcw className="w-5 h-5" />
-                                </button>
-                                <div className="flex flex-col ml-4">
-                                    <span className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Audio Dictation</span>
-                                    <div className="w-48 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-[#1e3a8a] transition-all duration-100 ease-linear"
-                                            style={{ width: `${audioProgress}%` }}
-                                        ></div>
+                    <div className="flex-1 flex flex-col w-full relative min-h-0">
+                        <div className="flex-1 flex flex-col overflow-y-auto w-full relative min-h-0 custom-scrollbar">
+                        {/* Action / Dictation Area (Hide in Audio Mode as it's now integrated) */}
+                        {!selectedExercise?.isAudioCourse && (
+                            <div className="p-6 bg-blue-50/30 border-b border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
+                                <div className="flex items-center space-x-4">
+                                    <button
+                                        onClick={togglePlayPause}
+                                        className="w-12 h-12 bg-[#1e3a8a] hover:bg-blue-800 text-white rounded-full flex items-center justify-center shadow-md transition-transform active:scale-95"
+                                    >
+                                        {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
+                                    </button>
+                                    <button
+                                        onClick={resetAudio}
+                                        className="w-10 h-10 bg-white border border-gray-300 text-gray-600 hover:text-[#1e3a8a] hover:border-[#1e3a8a] rounded-full flex items-center justify-center shadow-sm transition-colors"
+                                        title="Restart Audio"
+                                    >
+                                        <RotateCcw className="w-5 h-5" />
+                                    </button>
+                                    <div className="flex flex-col ml-4">
+                                        <span className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Audio Dictation</span>
+                                        <div className="w-48 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                            <div
+                                                className="h-full bg-[#1e3a8a] transition-all duration-100 ease-linear"
+                                                style={{ width: `${audioProgress}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Speed Controller */}
+                                <div className="flex items-center bg-white border border-gray-200 rounded-xl shadow-sm p-1 overflow-x-auto max-w-full">
+                                    <Volume2 className="w-4 h-4 text-gray-400 mx-2 shrink-0" />
+                                    <div className="flex space-x-1 border-l border-gray-100 pl-2">
+                                        {[0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map(speed => (
+                                            <button
+                                                key={speed}
+                                                onClick={() => changeSpeed(speed)}
+                                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${playbackSpeed === speed
+                                                    ? 'bg-[#1e3a8a] text-white shadow-sm'
+                                                    : 'text-gray-600 hover:bg-gray-100'
+                                                    }`}
+                                            >
+                                                {speed}x
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Speed Controller */}
-                            <div className="flex items-center bg-white border border-gray-200 rounded-xl shadow-sm p-1 overflow-x-auto max-w-full">
-                                <Volume2 className="w-4 h-4 text-gray-400 mx-2 shrink-0" />
-                                <div className="flex space-x-1 border-l border-gray-100 pl-2">
-                                    {[0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map(speed => (
-                                        <button
-                                            key={speed}
-                                            onClick={() => changeSpeed(speed)}
-                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${playbackSpeed === speed
-                                                ? 'bg-[#1e3a8a] text-white shadow-sm'
-                                                : 'text-gray-600 hover:bg-gray-100'
-                                                }`}
-                                        >
-                                            {speed}x
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
+                        )}
 
                         <div className={`flex-1 p-4 md:p-6 ${selectedExercise?.isAudioCourse ? 'flex flex-col' : 'grid grid-cols-1 lg:grid-cols-2 gap-8'} min-h-0`}>
                             {selectedExercise?.isAudioCourse ? (
@@ -780,14 +844,40 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
 
                                         {/* HTML5 Native Audio Player Component */}
                                         {selectedExercise?.audio && (
-                                            <div className="w-full bg-blue-50/60 p-3 rounded-2xl border border-blue-100 shadow-sm">
-                                                <audio 
-                                                    ref={audioRef}
-                                                    controls 
-                                                    controlsList="nodownload"
-                                                    src={selectedExercise?.audio} 
-                                                    className="w-full h-[46px] outline-none rounded-xl"
-                                                />
+                                            <div className="w-full bg-blue-50/60 p-5 rounded-2xl border border-blue-100 shadow-sm flex flex-col md:flex-row items-center gap-6">
+                                                <div className="flex-1 w-full">
+                                                    <audio 
+                                                        ref={audioRef}
+                                                        controls 
+                                                        controlsList="nodownload"
+                                                        src={selectedExercise?.audio} 
+                                                        className="w-full h-[46px] outline-none rounded-xl"
+                                                        onTimeUpdate={(e) => {
+                                                            const progress = (e.currentTarget.currentTime / e.currentTarget.duration) * 100;
+                                                            setAudioProgress(progress || 0);
+                                                        }}
+                                                        onEnded={() => {
+                                                            setIsPlaying(false);
+                                                            setAudioProgress(100);
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div className="shrink-0 flex items-center bg-white/80 backdrop-blur-sm border border-blue-200 rounded-xl p-1.5 shadow-sm">
+                                                    <div className="flex items-center space-x-1">
+                                                        {[0.75, 1.0, 1.25, 1.5, 2.0].map(speed => (
+                                                            <button
+                                                                key={speed}
+                                                                onClick={() => changeSpeed(speed)}
+                                                                className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all ${playbackSpeed === speed
+                                                                    ? 'bg-[#1e3a8a] text-white shadow-md scale-105'
+                                                                    : 'text-gray-500 hover:bg-white hover:text-[#1e3a8a]'
+                                                                    }`}
+                                                            >
+                                                                {speed}x
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -803,9 +893,9 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                                                 COPY-PASTE DISABLED
                                             </div>
                                         </div>
-                                        <div className="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-4 shadow-inner flex flex-col">
+                                        <div className="flex-1 bg-white border-2 border-gray-200 focus-within:border-[#1e3a8a] rounded-2xl p-2 shadow-sm flex flex-col transition-all">
                                             <textarea
-                                                className="flex-1 w-full h-full bg-transparent text-xl leading-relaxed text-gray-800 outline-none resize-none placeholder-gray-400 font-medium scroll-custom min-h-[300px]"
+                                                className="flex-1 w-full h-full bg-transparent text-xl leading-relaxed text-gray-800 outline-none resize-none placeholder-gray-400 font-medium scroll-custom p-4"
                                                 placeholder="The timer starts with your first keystroke. Listen carefully and transcribe the dictation here..."
                                                 value={inputText}
                                                 onChange={handleInputChange}
@@ -851,6 +941,14 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                                                     controlsList="nodownload"
                                                     src={selectedExercise?.audio} 
                                                     className="w-full h-[46px] outline-none rounded-xl"
+                                                    onTimeUpdate={(e) => {
+                                                        const progress = (e.currentTarget.currentTime / e.currentTarget.duration) * 100;
+                                                        setAudioProgress(progress || 0);
+                                                    }}
+                                                    onEnded={() => {
+                                                        setIsPlaying(false);
+                                                        setAudioProgress(100);
+                                                    }}
                                                 />
                                             </div>
                                         )}
@@ -875,24 +973,27 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                             )}
                         </div>
 
-                        {/* Bottom Actions */}
-                        <div className="bg-gray-50 px-6 py-5 border-t border-gray-200 flex justify-end space-x-4 shrink-0 mt-auto">
+                        {/* Bottom Actions (Sticky Footer) */}
+                        <div className="bg-gray-50 px-6 py-5 border-t border-gray-200 flex justify-end items-center space-x-6 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                            <div className="mr-auto hidden md:flex items-center text-xs font-bold text-gray-400 gap-2">
+                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Live Session Active
+                            </div>
                             <button
                                 onClick={handleReset}
-                                className="px-6 py-3 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 font-bold rounded-xl transition-colors shadow-sm"
+                                className="px-8 py-3.5 bg-white hover:bg-red-50 border-2 border-red-100 hover:border-red-200 text-red-600 font-black rounded-2xl transition-all shadow-sm active:scale-95"
                             >
                                 Reset Practice
                             </button>
                             <button
                                 onClick={handleSubmit}
                                 disabled={!isStarted && inputText.length === 0}
-                                className={`px-8 py-3 font-bold rounded-xl transition-transform shadow-md flex items-center space-x-2 ${(!isStarted && inputText.length === 0)
-                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                    : 'bg-green-600 hover:bg-green-700 text-white transform hover:scale-105'
+                                className={`px-12 py-3.5 font-black rounded-2xl transition-all shadow-lg flex items-center space-x-3 transform active:scale-95 ${(!isStarted && inputText.length === 0)
+                                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-2 border-gray-300'
+                                    : 'bg-green-600 hover:bg-green-700 text-white hover:shadow-green-200/50'
                                     }`}
                             >
-                                <CheckCircle2 className="w-5 h-5" />
-                                <span>Submit Test</span>
+                                <CheckCircle2 className="w-6 h-6" />
+                                <span className="text-lg">STET & SUBMIT</span>
                             </button>
                         </div>
                     </div>
@@ -966,17 +1067,8 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                 </div>
             )}
             
-            <audio 
-                ref={audioRef} 
-                onTimeUpdate={(e) => {
-                    const progress = (e.target.currentTime / e.target.duration) * 100;
-                    setAudioProgress(progress || 0);
-                }}
-                onEnded={() => {
-                    setIsPlaying(false);
-                    setAudioProgress(100);
-                }}
-            />
+
+            </div>
         </div>
     );
 };

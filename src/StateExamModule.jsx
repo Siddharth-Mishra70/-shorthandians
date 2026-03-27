@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Map, ChevronRight, Scale, Edit2, Headphones, BookOpen } from 'lucide-react';
+import { ArrowLeft, Map, ChevronRight, Scale, Edit2, Headphones, BookOpen, FileText } from 'lucide-react';
 
 const STATE_EXAMS = [
     'Uttar Pradesh', 'Bihar', 'Madhya Pradesh', 'Rajasthan', 'Maharashtra',
@@ -13,6 +13,7 @@ const MODULE_TYPES = [
     { key: 'pitman', label: 'Pitman Exercise', icon: Edit2 },
     { key: 'audio', label: 'Audio Dictation', icon: Headphones },
     { key: 'kailash', label: 'Kailash Chandra', icon: BookOpen },
+    { key: 'comprehension', label: 'Comprehension', icon: FileText },
 ];
 
 const StateExamModule = ({ onBack, onSelectTest, onNavigateCourse }) => {
@@ -44,7 +45,7 @@ const StateExamModule = ({ onBack, onSelectTest, onNavigateCourse }) => {
                     
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                         {STATE_EXAMS.map(state => {
-                            const totalItems = ['highcourt', 'pitman', 'audio', 'kailash'].reduce((acc, t) => acc + (stateExams[`${state}__${t}`]?.length || 0), 0);
+                            const totalItems = ['highcourt', 'pitman', 'audio', 'kailash', 'comprehension'].reduce((acc, t) => acc + (stateExams[`${state}__${t}`]?.length || 0), 0);
                             return (
                                 <button key={state} onClick={() => setSelectedState(state)}
                                     className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 hover:border-[#1e3a8a] hover:shadow-md transition-all text-left flex flex-col group">
@@ -130,6 +131,7 @@ const StateExamModule = ({ onBack, onSelectTest, onNavigateCourse }) => {
                                 if (selectedModule.key === 'pitman') targetRoute = 'pitman';
                                 if (selectedModule.key === 'audio') targetRoute = 'arena-audio';
                                 if (selectedModule.key === 'kailash') targetRoute = 'arena-kc';
+                                if (selectedModule.key === 'comprehension') targetRoute = 'arena-comp';
 
                                 localStorage.setItem('active_selected_test_id', test.id);
                                 onNavigateCourse(targetRoute);

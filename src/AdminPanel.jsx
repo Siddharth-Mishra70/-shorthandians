@@ -18,6 +18,7 @@ const MODULE_TYPES = [
     { key: 'pitman', label: 'Pitman Exercise', icon: Edit2, color: 'from-purple-600 to-purple-800', bg: 'bg-purple-50', text: 'text-purple-700' },
     { key: 'audio', label: 'Audio Dictation', icon: Headphones, color: 'from-green-600 to-green-800', bg: 'bg-green-50', text: 'text-green-700' },
     { key: 'kailash', label: 'Kailash Chandra', icon: BookOpen, color: 'from-amber-500 to-amber-700', bg: 'bg-amber-50', text: 'text-amber-700' },
+    { key: 'comprehension', label: 'Comprehension', icon: FileText, color: 'from-cyan-600 to-cyan-800', bg: 'bg-cyan-50', text: 'text-cyan-700' },
     { key: 'state', label: 'State Exam', icon: Globe, color: 'from-rose-600 to-rose-800', bg: 'bg-rose-50', text: 'text-rose-700' },
 ];
 
@@ -26,6 +27,7 @@ const QUICK_MODULES = [
     { key: 'pitman',    label: 'Pitman Exercise',       icon: '✏️', accept: '.pdf,image/*', textLabel: 'English Transcription Text' },
     { key: 'audio',     label: 'Audio Dictation',       icon: '🎙️', accept: 'audio/*',      textLabel: 'Dictation Transcription Text' },
     { key: 'kailash',   label: 'Kailash Chandra',         icon: '📖', accept: '.pdf',         textLabel: 'Passage Text' },
+    { key: 'comprehension', label: 'Comprehension',         icon: '📝', accept: '.pdf',         textLabel: 'Passage Text' },
 ];
 
 // ── PURE SUB-COMPONENTS (defined at module scope to prevent remount on re-render) ──
@@ -165,6 +167,20 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
         return [];
     });
 
+    // Comprehension Section
+    const [compId, setCompId] = useState(null);
+    const [compTitle, setCompTitle] = useState('');
+    const [compText, setCompText] = useState('');
+    const [compPdf, setCompPdf] = useState(null);
+    const [isAddingComp, setIsAddingComp] = useState(false);
+    const [isSavingComp, setIsSavingComp] = useState(false);
+    const [editingCompId, setEditingCompId] = useState(null);
+    const [compTests, setCompTests] = useState(() => {
+        const saved = localStorage.getItem('admin_comprehension_data_list');
+        if (saved) return JSON.parse(saved);
+        return [];
+    });
+
     // High Court State
     const [isAddingHc, setIsAddingHc] = useState(false);
     const [editingHcId, setEditingHcId] = useState(null);
@@ -246,6 +262,8 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
             if (pit) setPitmanTests(pit);
             const { data: kc } = await supabase.from('exercises').select('*').eq('category', 'kailash').order('created_at', { ascending: false });
             if (kc) setKailashTests(kc);
+            const { data: comp } = await supabase.from('exercises').select('*').eq('category', 'comprehension').order('created_at', { ascending: false });
+            if (comp) setCompTests(comp);
             const { data: aud } = await supabase.from('exercises').select('*').in('category', ['audio', 'Audio Dictation']).order('created_at', { ascending: false });
             if (aud) {
                 // Map the newly requested audio_url column natively into the frontend array struct
@@ -336,7 +354,7 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
         setQuickSaving(true);
         const isEdit = !!editingQuickId;
         const testId = isEdit ? editingQuickId : crypto.randomUUID();
-        const allLocalTests = [...hcTests, ...pitmanTests, ...kailashTests, ...audioTests];
+        const allLocalTests = [...hcTests, ...pitmanTests, ...kailashTests, ...audioTests, ...compTests];
         const existingItem = isEdit ? allLocalTests.find(t => t.id === testId) : null;
 
         const isHc = quickModule === 'highcourt';
@@ -376,6 +394,8 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
             updateList(pitmanTests, setPitmanTests, 'admin_pitman_data_list');
         } else if (quickModule === 'kailash') {
             updateList(kailashTests, setKailashTests, 'admin_kailash_data_list');
+        } else if (quickModule === 'comprehension') {
+            updateList(compTests, setCompTests, 'admin_comprehension_data_list');
         } else if (quickModule === 'audio') {
             updateList(audioTests, setAudioTests, 'admin_published_audio_list');
         }
@@ -446,6 +466,10 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
             const kcUpdated = [newItem, ...kailashTests];
             setKailashTests(kcUpdated);
             localStorage.setItem('admin_kailash_data_list', JSON.stringify(kcUpdated));
+        } else if (stateSubModule === 'comprehension') {
+            const compUpdated = [{ ...newItem, category: 'comprehension' }, ...compTests];
+            setCompTests(compUpdated);
+            localStorage.setItem('admin_comprehension_data_list', JSON.stringify(compUpdated));
         } else if (stateSubModule === 'audio') {
             try {
                 if (stateUploadPdf) {
@@ -844,6 +868,53 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
         try { if (supabase && !supabase.supabaseUrl?.includes('placeholder')) await supabase.from('exercises').delete().eq('id', id); } catch { }
     };
 
+    const handleSaveCompData = async () => {
+        if (!compTitle.trim() || !compText.trim()) { alert('Title and text are required.'); return; }
+        setIsSavingComp(true);
+        const isEdit = !!editingCompId;
+        const testId = isEdit ? editingCompId : crypto.randomUUID();
+        const newTest = {
+            id: testId,
+            title: compTitle,
+            original_text: compText,
+            pdf: compPdf,
+            category: 'comprehension',
+            created_at: isEdit ? compTests.find(t => t.id === testId)?.created_at || new Date().toISOString() : new Date().toISOString()
+        };
+
+        try {
+            if (supabase && !supabase.supabaseUrl?.includes('placeholder')) {
+                const dbPayload = { title: compTitle, original_text: compText, category: 'comprehension' };
+                if (isEdit) await supabase.from('exercises').update(dbPayload).eq('id', testId);
+                else await supabase.from('exercises').insert([{ id: testId, ...dbPayload }]);
+            }
+            const updated = isEdit ? compTests.map(t => t.id === testId ? newTest : t) : [newTest, ...compTests];
+            setCompTests(updated);
+            localStorage.setItem('admin_comprehension_data_list', JSON.stringify(updated));
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsSavingComp(false); setCompTitle(''); setCompText(''); setCompPdf(null); setIsAddingComp(false); setEditingCompId(null);
+        }
+    };
+
+    const handleEditComp = (id) => {
+        const test = compTests.find(t => t.id === id);
+        if (!test) return;
+        setCompTitle(test.title || '');
+        setCompText(test.original_text || test.text || '');
+        setCompPdf(test.pdf || null);
+        setEditingCompId(id);
+        setIsAddingComp(true);
+    };
+
+    const handleDeleteComp = async (id) => {
+        if (!window.confirm('Delete this comprehension?')) return;
+        const updated = compTests.filter(t => t.id !== id);
+        setCompTests(updated); localStorage.setItem('admin_comprehension_data_list', JSON.stringify(updated));
+        try { if (supabase && !supabase.supabaseUrl?.includes('placeholder')) await supabase.from('exercises').delete().eq('id', id); } catch { }
+    };
+
     const handleClearStorage = () => {
         if (window.confirm('Clear all published content? Student results will remain.')) {
             ['admin_published_audio_list', 'admin_highcourt_pdf_published', 'admin_kailash_data_list', 'admin_highcourt_data_list', 'admin_pitman_data_list', 'admin_state_exams'].forEach(k => localStorage.removeItem(k));
@@ -1042,6 +1113,27 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
             );
         }
 
+        if (activeModule === 'comprehension') {
+            return (
+                <div>
+                    <div className="flex items-center mb-6 space-x-3">
+                        <button onClick={() => setActiveModule('home')} className="p-2 hover:bg-gray-100 rounded-lg transition-colors"><ArrowLeft className="w-5 h-5 text-gray-500" /></button>
+                        <h2 className="text-2xl font-bold text-gray-800">Comprehension Management</h2>
+                        <button onClick={() => {
+                            if (isAddingComp) { setIsAddingComp(false); setEditingCompId(null); setCompTitle(''); setCompText(''); setCompPdf(null); }
+                            else { setIsAddingComp(true); setEditingCompId(null); }
+                        }} className="ml-auto bg-red-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center hover:bg-red-800 transition-colors shadow">
+                            {isAddingComp && !editingCompId ? <><X className="w-4 h-4 mr-1" />Cancel</> : <><Plus className="w-4 h-4 mr-1" />Add New</>}
+                        </button>
+                    </div>
+                    {isAddingComp && (
+                        <UploadForm isEdit={!!editingCompId} title={compTitle} setTitle={setCompTitle} text={compText} setText={setCompText} pdf={compPdf} setPdf={setCompPdf} onSave={handleSaveCompData} onCancel={() => { setIsAddingComp(false); setEditingCompId(null); setCompTitle(''); setCompText(''); setCompPdf(null); }} saving={isSavingComp} />
+                    )}
+                    <TestList tests={compTests} onDelete={handleDeleteComp} onEdit={handleEditComp} emptyMsg="No Comprehension exercises uploaded yet." />
+                </div>
+            );
+        }
+
         if (activeModule === 'audio') {
             return (
                 <div>
@@ -1130,7 +1222,7 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
                         <p className="text-gray-500 mb-6">Select a state to upload exam content (Audio Dictation, Pitman, High Court, Comprehension).</p>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                             {STATE_EXAMS.map(state => {
-                                const totalItems = ['highcourt', 'pitman', 'audio', 'kailash'].reduce((acc, t) => acc + (stateExams[`${state}__${t}`]?.length || 0), 0);
+                                const totalItems = ['highcourt', 'pitman', 'audio', 'kailash', 'comprehension'].reduce((acc, t) => acc + (stateExams[`${state}__${t}`]?.length || 0), 0);
                                 return (
                                     <div key={state} onClick={() => setSelectedState(state)}
                                         className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 hover:border-red-400 hover:shadow-md cursor-pointer transition-all group">
@@ -1153,7 +1245,8 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
                     { key: 'highcourt', label: 'High Court Formatting', icon: Scale, color: 'from-blue-600 to-blue-800' },
                     { key: 'pitman', label: 'Pitman Exercise', icon: Edit2, color: 'from-purple-600 to-purple-800' },
                     { key: 'audio', label: 'Audio Dictation', icon: Headphones, color: 'from-green-600 to-green-800' },
-                    { key: 'kailash', label: 'Comprehension', icon: BookOpen, color: 'from-amber-500 to-amber-700' },
+                    { key: 'kailash', label: 'Kailash Chandra', icon: BookOpen, color: 'from-amber-500 to-amber-700' },
+                    { key: 'comprehension', label: 'Comprehension', icon: FileText, color: 'from-cyan-600 to-cyan-800' },
                 ];
                 return (
                     <div>
@@ -1189,8 +1282,8 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
             // State + Sub-module content view
             const stateKey = `${selectedState}__${stateSubModule}`;
             const stateItems = stateExams[stateKey] || [];
-            const subLabel = { highcourt: 'High Court Formatting', pitman: 'Pitman Exercise', audio: 'Audio Dictation', kailash: 'Comprehension' }[stateSubModule];
-            const acceptMap = { audio: 'audio/*', highcourt: '.pdf,image/*', pitman: '.pdf,image/*', kailash: '.pdf' };
+            const subLabel = { highcourt: 'High Court Formatting', pitman: 'Pitman Exercise', audio: 'Audio Dictation', kailash: 'Kailash Chandra', comprehension: 'Comprehension' }[stateSubModule];
+            const acceptMap = { audio: 'audio/*', highcourt: '.pdf,image/*', pitman: '.pdf,image/*', kailash: '.pdf', comprehension: '.pdf' };
             return (
                 <div>
                     <div className="flex items-center mb-6 space-x-3">

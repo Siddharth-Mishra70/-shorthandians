@@ -39,13 +39,14 @@ export async function saveTestResult(supabase, params) {
   const row = {
     user_id:        userId,
     exercise_id:    params.exerciseId || null,
-    wpm:            Math.round(wpm),
-    accuracy:       parseFloat(accuracy.toFixed(2)),
-    total_mistakes: mistakesCount ?? 0,
+    wpm:            Math.round(params.wpm || 0),
+    accuracy:       parseFloat((params.accuracy || 0).toFixed(2)),
+    total_mistakes: params.totalMistakes ?? params.mistakesCount ?? 0,
     mistakes_data: {
       attempted_text: attemptedText ?? '',
       original_text: params.originalText ?? '',
-      student_name: studentName
+      student_name: studentName,
+      ...(params.extraMistakesData || {})
     }
   };
 

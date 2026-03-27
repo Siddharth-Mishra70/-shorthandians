@@ -92,15 +92,34 @@ const useProtectedNav = (isLoggedIn, setCurrentView, setShowAuthModal, setPendin
 // App Root
 // ─────────────────────────────────────────────────────────────────────────────
 function App() {
-  // ── State ─────────────────────────────────────────────────
-  // Views: 'landing' | 'auth' | 'dashboard' | 'arena' | 'formatting' | 'pitman' | 'results' | 'results:UUID'
-  const [currentView, setCurrentView] = useState('landing');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [user, setUser] = useState(null);
-  const [showAuthModal, setShowAuthModal] = useState(false); // Login Required popup
-  const [pendingView, setPendingView] = useState(null);      // where to go after login
-  const [arenaTab, setArenaTab] = useState('transcribe');     // 'transcribe' | 'analysis'
-  const [lastAttemptId, setLastAttemptId] = useState(null);
+    // ── State (Initialized from LocalStorage) ────────────────
+    const [isLoggedIn, setIsLoggedIn] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return !!localStorage.getItem('currentUser');
+    });
+    
+    const [user, setUser] = useState(() => {
+        if (typeof window === 'undefined') return null;
+        try {
+            const saved = localStorage.getItem('currentUser');
+            return saved ? JSON.parse(saved) : null;
+        } catch (e) {
+            return null;
+        }
+    });
+
+    const [currentView, setCurrentView] = useState(() => {
+        if (typeof window === 'undefined') return 'landing';
+        const saved = localStorage.getItem('currentUser');
+        return saved ? 'dashboard' : 'landing';
+    });
+    
+    const [showAuthModal, setShowAuthModal] = useState(false); // Login Required popup
+    const [pendingView, setPendingView] = useState(null);      // where to go after login
+    const [arenaTab, setArenaTab] = useState('transcribe');     // 'transcribe' | 'analysis'
+    const [lastAttemptId, setLastAttemptId] = useState(null);
+
+
 
   // Navigate to a specific attempt result page after saving
   const navigateToResult = (attemptId) => {
@@ -111,7 +130,8 @@ function App() {
     { id: 'hc-formatting', title: 'Allahabad High Court', type: 'Formatting Test', isPremium: true, view: 'formatting' },
     { id: 'pitman-ex', title: 'Pitman Shorthand', type: 'Exercise Practice', isPremium: false, view: 'pitman' },
     { id: 'audio-dict', title: 'Audio Dictations', type: '80/100/120 WPM', isPremium: false, view: 'arena-audio' },
-    { id: 'comprehension', title: 'Comprehension', type: 'Kailash Chandra Vol', isPremium: false, view: 'arena-kc' },
+    { id: 'kailash-chandra', title: 'Kailash Chandra', type: 'Standard Dictations', isPremium: false, view: 'arena-kc' },
+    { id: 'comprehension', title: 'Comprehension', type: 'Theory & Test', isPremium: false, view: 'arena-comp' },
     { id: 'state-exam', title: 'State Exams', type: 'Selection Focused', isPremium: true, view: 'arena-state' },
   ];
 
@@ -121,23 +141,25 @@ function App() {
   const navigate = useProtectedNav(isLoggedIn, setCurrentView, setShowAuthModal, setPendingView);
 
   // ── Auth Handlers ─────────────────────────────────────────
-  const handleAuthSuccess = (userData) => {
-    setIsLoggedIn(true);
-    setUser(userData);
-    // Redirect to pending view (if user was trying to access something) or dashboard
-    if (pendingView) {
-      setCurrentView(pendingView);
-      setPendingView(null);
-    } else {
-      setCurrentView('dashboard');
-    }
-  };
+    const handleAuthSuccess = (userData) => {
+        setIsLoggedIn(true);
+        setUser(userData);
+        
+        // Strictly set to dashboard unless a specific exercise/page is pending
+        if (pendingView && pendingView !== 'dashboard' && pendingView !== 'landing') {
+            setCurrentView(pendingView);
+        } else {
+            setCurrentView('dashboard');
+        }
+        setPendingView(null);
+    };
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUser(null);
-    setCurrentView('landing');
-  };
+    const handleLogout = () => {
+        localStorage.removeItem('currentUser');
+        setIsLoggedIn(false);
+        setUser(null);
+        setCurrentView('landing');
+    };
 
   // Modal helpers
   const openAuthFromModal = (tab = 'login') => {
@@ -145,15 +167,20 @@ function App() {
     setCurrentView('auth');
   };
 
-  // ── Protected View Guard ──────────────────────────────────
-  // If user navigates directly to a protected view via state, kick them out
-  useEffect(() => {
-    const protectedViews = ['dashboard', 'arena-kc', 'arena-state', 'arena-audio', 'formatting', 'pitman', 'results'];
-    const isProtected = protectedViews.includes(currentView) || currentView.startsWith('results:');
-    if (isProtected && !isLoggedIn) {
-      setCurrentView('auth');
-    }
-  }, [currentView, isLoggedIn]);
+    // ── Protected View Guard ──────────────────────────────────
+    useEffect(() => {
+        const protectedViews = ['dashboard', 'arena-kc', 'arena-comp', 'arena-state', 'arena-audio', 'formatting', 'pitman', 'results'];
+        const isProtected = protectedViews.includes(currentView) || currentView.startsWith('results:');
+        
+        // Add a check to avoid flickering/mis-redirects if we just logged in or are loading
+        if (isProtected && !isLoggedIn) {
+            // Check if there is a session being restored before kicking them out
+            const sessionFound = localStorage.getItem('currentUser');
+            if (!sessionFound) {
+                setCurrentView('auth');
+            }
+        }
+    }, [currentView, isLoggedIn]);
 
   // ── Auth Page ─────────────────────────────────────────────
   if (currentView === 'auth') {
@@ -181,7 +208,7 @@ function App() {
     );
   }
 
-  if (currentView === 'arena-kc' || currentView === 'arena-audio') {
+  if (currentView === 'arena-kc' || currentView === 'arena-audio' || currentView === 'arena-comp') {
     return (
       <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
         {/* Arena Header with Tabs */}
@@ -251,7 +278,7 @@ function App() {
   }
 
   if (currentView === 'formatting') {
-    return <HighCourtFormatting onBack={() => setCurrentView('dashboard')} />;
+    return <HighCourtFormatting onBack={() => setCurrentView('dashboard')} user={user} />;
   }
 
   if (currentView === 'pitman') {

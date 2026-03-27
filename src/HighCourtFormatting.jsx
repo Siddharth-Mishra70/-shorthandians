@@ -20,8 +20,10 @@ import {
     Keyboard
 } from 'lucide-react';
 import DetailedAnalysisPanel from './DetailedAnalysisPanel';
+import { saveTestResult } from './lib/saveTestResult';
+import { generateDetailedAnalysis } from './lib/generateDetailedAnalysis';
 
-const HighCourtFormatting = ({ onBack }) => {
+const HighCourtFormatting = ({ onBack, user }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [finalText, setFinalText] = useState('');
@@ -180,43 +182,47 @@ ORAL ORDER
 
     const handleSubmit = async () => {
         if (!editorRef.current) return;
-        const content = editorRef.current.innerHTML;
+        const htmlContent = editorRef.current.innerHTML;
+        const resultText = editorRef.current.innerText;
 
-        if (!content.trim() || content === '<br>') return;
+        if (!resultText.trim() || resultText === '<br>') return;
 
         setIsSubmitting(true);
 
         try {
-            const { error } = await supabase
-                .from('formatting_attempts')
-                .insert([
-                    {
-                        user_id: '00000000-0000-0000-0000-000000000000',
-                        html_content: content,
-                        created_at: new Date().toISOString()
-                    }
-                ]);
+            // 1. Generate Automated Analysis for scoring
+            const originalBase = answerKeyText || referenceText;
+            const analysis = generateDetailedAnalysis(originalBase, resultText);
+            const { accuracy, totalMistakes } = analysis.summary;
 
-            if (error) {
-                if (error.code === 'PGRST205') {
-                    // Table doesn't exist yet in Supabase — using localStorage fallback
-                    console.warn('[HighCourt] formatting_attempts table not found. Create it in Supabase. Saving locally for now.');
-                } else {
-                    console.warn('[HighCourt] Supabase insert failed, saving locally:', error.message);
-                }
-                localStorage.setItem(`formatting_attempt_${Date.now()}`, JSON.stringify({ html_content: content, timestamp: Date.now() }));
+            // 2. Save via Utility to Primary DB (test_results)
+            const result = await saveTestResult(supabase, {
+                wpm: 0, // Formatting test - not timed
+                accuracy: accuracy,
+                totalMistakes: totalMistakes, 
+                attemptedText: resultText,
+                originalText: originalBase,
+                exerciseId: selectedTestId,
+                userId: user?.id,
+                studentName: user?.name,
+                // Attach HTML for the admin to check formatting specifically
+                extraMistakesData: { html_content: htmlContent }
+            });
+
+            if (result && result.attemptId) {
+                console.log('[HighCourt] Save success:', result.attemptId);
             }
         } catch (err) {
-            // Network / connection error — silent local fallback
-            localStorage.setItem(`formatting_attempt_${Date.now()}`, JSON.stringify({ html_content: content, timestamp: Date.now() }));
+            console.error('[HighCourt] Submission failed:', err);
+            // Fallback saved via local logic in saveTestResult.js 'stn_local_results'
         } finally {
-            // Always show analysis regardless of database connection
-            const resultText = editorRef.current.innerText;
+            // Update local UI state
             setFinalText(resultText);
             const newAttempt = { text: resultText, timestamp: new Date().toLocaleString() };
             const updatedAttempts = [newAttempt, ...pastAttempts];
             setPastAttempts(updatedAttempts);
             localStorage.setItem('hc_formatting_attempts', JSON.stringify(updatedAttempts));
+            
             setSubmitted(true);
             setIsSubmitting(false);
         }
