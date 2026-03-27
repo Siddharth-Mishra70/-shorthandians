@@ -37,6 +37,28 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
     const [dbExerciseId, setDbExerciseId] = useState(null);   // real UUID from Supabase
     const [viewMode, setViewMode] = useState('selection'); // 'selection' | 'practice'
     const [activeDateTab, setActiveDateTab] = useState('Today');
+    const [isTestActive, setIsTestActive] = useState(false);
+    const [countdown, setCountdown] = useState(null);
+    const textareaRef = useRef(null);
+
+    // Test Countdown Effect
+    useEffect(() => {
+        let timer;
+        if (countdown !== null && countdown > 0) {
+            timer = setTimeout(() => {
+                setCountdown(prev => prev - 1);
+            }, 1000);
+        } else if (countdown === 0) {
+            setIsTestActive(true);
+            setCountdown(null);
+            setTimeout(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.focus();
+                }
+            }, 100);
+        }
+        return () => clearTimeout(timer);
+    }, [countdown]);
 
 
 
@@ -313,6 +335,8 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
         setWpm(0);
         setAccuracy(100);
         setIsPlaying(false);
+        setIsTestActive(false);
+        setCountdown(null);
         resetAudio(); 
     };
 
@@ -876,46 +900,54 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
 
                                     {/* Massive Transcription Field */}
                                     <div className="flex flex-col flex-1 min-h-[450px] bg-white border-2 border-gray-200 rounded-[2rem] p-8 shadow-xl shadow-blue-900/5">
+                                        
+                                        {!isTestActive && countdown === null && (
+                                            <div className="mb-6 flex justify-center animate-in fade-in zoom-in duration-500">
+                                                <button 
+                                                    onClick={() => setCountdown(10)}
+                                                    className="px-10 py-4 bg-[#1e3a8a] hover:bg-blue-800 text-white font-black text-xl rounded-2xl shadow-xl shadow-blue-200 hover:scale-105 transition-all transform active:scale-95 flex items-center space-x-3 group"
+                                                >
+                                                    <Play className="w-6 h-6 fill-current group-hover:animate-ping" />
+                                                    <span>START PRACTICE TEST (10s Countdown)</span>
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {countdown !== null && (
+                                            <div className="mb-6 py-4 bg-red-50 border-2 border-red-200 rounded-2xl text-center animate-pulse">
+                                                <h2 className="text-3xl font-black text-red-600 tracking-wider">
+                                                    TEST STARTING IN: {countdown} SECONDS
+                                                </h2>
+                                                <p className="text-red-400 font-bold text-sm uppercase tracking-widest mt-1">Get your fingers ready...</p>
+                                            </div>
+                                        )}
+
                                         <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3 h-12 shrink-0">
                                             <div className="flex items-center space-x-2">
-                                                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                                                <h3 className="text-sm font-bold text-gray-600 uppercase tracking-widest">Live Transcription Area</h3>
+                                                <div className={`w-2 h-2 rounded-full ${isTestActive ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
+                                                <h3 className="text-sm font-bold text-gray-600 uppercase tracking-widest">
+                                                    {isTestActive ? 'Live Transcription Area (Active)' : 'Transcription Area (Locked)'}
+                                                </h3>
                                             </div>
-                                            <div className="flex items-center gap-3">
-                                                <button
-                                                    onClick={handleReset}
-                                                    className="px-4 py-2 bg-white hover:bg-red-50 border border-gray-200 text-red-600 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all active:scale-95"
-                                                >
-                                                    Reset Practice
-                                                </button>
-                                                <button
-                                                    onClick={handleSubmit}
-                                                    disabled={!isStarted && inputText.length === 0}
-                                                    className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-md flex items-center space-x-2 active:scale-95 ${(!isStarted && inputText.length === 0)
-                                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
-                                                        : 'bg-green-600 hover:bg-green-700 text-white'
-                                                        }`}
-                                                >
-                                                    <CheckCircle2 className="w-3 h-3" />
-                                                    <span>STET & SUBMIT</span>
-                                                </button>
+                                            <div className="text-[10px] bg-red-50 text-red-600 px-3 py-1.5 rounded-full font-black italic tracking-wider shadow-sm">
+                                                COPY-PASTE DISABLED
                                             </div>
                                         </div>
-                                        <div className="flex-1 bg-white border-2 border-gray-200 rounded-xl p-4 shadow-sm flex flex-col min-h-[300px]">
+                                        <div className={`flex-1 border-2 rounded-xl p-4 shadow-sm flex flex-col min-h-[300px] transition-all duration-500 ${isTestActive ? 'bg-white border-gray-200' : 'bg-gray-100 border-gray-300 grayscale opacity-60'}`}>
                                             <textarea
-                                                className="flex-1 w-full h-full bg-transparent text-xl leading-relaxed text-gray-900 outline-none resize-none placeholder-gray-300 font-bold scroll-custom p-8"
-                                                placeholder="Listen to the audio and transcribe here. All words are visible as you type."
+                                                ref={textareaRef}
+                                                className={`flex-1 w-full h-full bg-transparent text-xl leading-relaxed text-gray-900 outline-none resize-none placeholder-gray-400 font-bold scroll-custom p-8 ${!isTestActive ? 'cursor-not-allowed select-none' : ''}`}
+                                                placeholder={isTestActive ? "Listen to the audio and transcribe here..." : "Click 'START TEST' above to begin the countdown..."}
                                                 value={inputText}
                                                 onChange={handleInputChange}
                                                 onCopy={(e) => { e.preventDefault(); alert("Copying is disabled!"); }}
                                                 onPaste={(e) => { e.preventDefault(); alert("Pasting is disabled!"); }}
                                                 onContextMenu={(e) => { e.preventDefault(); }}
-                                                disabled={timeLeft === 0}
+                                                disabled={!isTestActive || timeLeft === 0}
                                                 autoComplete="off"
                                                 autoCorrect="off"
                                                 autoCapitalize="off"
                                                 spellCheck="false"
-                                                autoFocus
                                             />
                                         </div>
                                     </div>
