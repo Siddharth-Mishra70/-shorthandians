@@ -78,7 +78,7 @@ const CircularCourseCard = ({ title, type, isPremium, onTakeTest }) => (
 // ─────────────────────────────────────────────────────────────────────────────
 const useProtectedNav = (isLoggedIn, setCurrentView, setShowAuthModal, setPendingView) => {
   return (targetView) => {
-    const protectedViews = ['dashboard', 'arena', 'formatting', 'pitman'];
+    const protectedViews = ['dashboard', 'arena-kc', 'arena-audio', 'arena-comp', 'arena-state', 'formatting', 'pitman'];
     if (protectedViews.includes(targetView) && !isLoggedIn) {
       setPendingView(targetView);   // remember where they wanted to go
       setShowAuthModal(true);       // show login required popup
@@ -110,8 +110,8 @@ function App() {
 
     const [currentView, setCurrentView] = useState(() => {
         if (typeof window === 'undefined') return 'landing';
-        const saved = localStorage.getItem('currentUser');
-        return saved ? 'dashboard' : 'landing';
+        // Always default to landing page even if logged in, per user preference
+        return 'landing';
     });
     
     const [showAuthModal, setShowAuthModal] = useState(false); // Login Required popup
@@ -145,11 +145,18 @@ function App() {
         setIsLoggedIn(true);
         setUser(userData);
         
-        // Strictly set to dashboard unless a specific exercise/page is pending
+        // Admins should strictly go to Admin Dashboard
+        if (userData?.role === 'admin') {
+            setCurrentView('dashboard');
+            setPendingView(null);
+            return;
+        }
+        
+        // Strictly set to landing (home page) unless a specific exercise is pending
         if (pendingView && pendingView !== 'dashboard' && pendingView !== 'landing') {
             setCurrentView(pendingView);
         } else {
-            setCurrentView('dashboard');
+            setCurrentView('landing');
         }
         setPendingView(null);
     };
