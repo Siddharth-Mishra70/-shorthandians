@@ -110,8 +110,7 @@ function App() {
 
     const [currentView, setCurrentView] = useState(() => {
         if (typeof window === 'undefined') return 'landing';
-        // Always default to landing page even if logged in, per user preference
-        return 'landing';
+        return localStorage.getItem('currentUser') ? 'dashboard' : 'landing';
     });
     
     const [showAuthModal, setShowAuthModal] = useState(false); // Login Required popup
@@ -152,12 +151,8 @@ function App() {
             return;
         }
         
-        // Strictly set to landing (home page) unless a specific exercise is pending
-        if (pendingView && pendingView !== 'dashboard' && pendingView !== 'landing') {
-            setCurrentView(pendingView);
-        } else {
-            setCurrentView('landing');
-        }
+        // After login, strictly go to the Dashboard
+        setCurrentView('dashboard');
         setPendingView(null);
     };
 

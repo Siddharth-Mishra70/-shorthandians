@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import {
     Save,
@@ -17,7 +17,8 @@ import {
     RotateCcw,
     ChevronDown,
     ChevronUp,
-    Keyboard
+    Keyboard,
+    Clock
 } from 'lucide-react';
 import DetailedAnalysisPanel from './DetailedAnalysisPanel';
 import { saveTestResult } from './lib/saveTestResult';
@@ -31,6 +32,10 @@ const HighCourtFormatting = ({ onBack, user }) => {
     const [showPastAttempts, setShowPastAttempts] = useState(false);
     const [viewMode, setViewMode] = useState('selection'); // 'selection' | 'writing'
     const [activeDateTab, setActiveDateTab] = useState('Today');
+    const [selectedDuration, setSelectedDuration] = useState(10);
+    const [targetWpm, setTargetWpm] = useState(80);
+    const [timeLeft, setTimeLeft] = useState(600);
+    const [isTimerRunning, setIsTimerRunning] = useState(false);
     const editorRef = useRef(null);
 
     const [hcTests, setHcTests] = useState([]);
@@ -91,6 +96,40 @@ const HighCourtFormatting = ({ onBack, user }) => {
         window.addEventListener('storage', loadTests);
         return () => window.removeEventListener('storage', loadTests);
     }, []);
+
+    // Timer SYNC effect
+    useEffect(() => {
+        if (!isTimerRunning && !submitted) {
+            setTimeLeft(selectedDuration * 60);
+        }
+    }, [selectedDuration, isTimerRunning, submitted]);
+
+    // Timer COUNTDOWN effect
+    useEffect(() => {
+        let timer;
+        if (isTimerRunning && timeLeft > 0 && !submitted) {
+            timer = setInterval(() => {
+                setTimeLeft(prev => prev - 1);
+            }, 1000);
+        } else if (isTimerRunning && timeLeft === 0 && !submitted) {
+            clearInterval(timer);
+            setIsTimerRunning(false);
+            handleSubmit(); // Auto submit
+        }
+        return () => clearInterval(timer);
+    }, [isTimerRunning, timeLeft, submitted]);
+
+    const formatTime = (seconds) => {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    };
+
+    const handleInputStart = () => {
+        if (!isTimerRunning && !submitted && timeLeft > 0) {
+            setIsTimerRunning(true);
+        }
+    };
 
     const defaultSample = `IN THE HIGH COURT OF JUDICATURE AT PATNA
 Civil Writ Jurisdiction Case No. 1234 of 2024
@@ -225,12 +264,15 @@ ORAL ORDER
             
             setSubmitted(true);
             setIsSubmitting(false);
+            setIsTimerRunning(false);
         }
     };
 
     const handleRetake = () => {
         setSubmitted(false);
         setFinalText('');
+        setIsTimerRunning(false);
+        setTimeLeft(selectedDuration * 60);
         if (editorRef.current) {
             editorRef.current.innerHTML = '<p><br></p>';
         }
@@ -239,6 +281,8 @@ ORAL ORDER
     const handleReset = () => {
         setSubmitted(false);
         setFinalText('');
+        setIsTimerRunning(false);
+        setTimeLeft(selectedDuration * 60);
         if (editorRef.current) {
             editorRef.current.innerHTML = '<p><br></p>';
         }
@@ -359,6 +403,36 @@ ORAL ORDER
                     <div className="flex items-center space-x-2">
                         <Gavel className="w-6 h-6 text-blue-200" />
                         <h2 className="text-xl font-bold tracking-wide">High Court Formatting Module</h2>
+                    </div>
+                    <div className="flex items-center space-x-3 ml-6 border-l border-blue-400 pl-6">
+                        <div className="flex items-center space-x-2 bg-blue-800/50 px-3 py-1.5 rounded-lg mr-2">
+                            <Clock className="w-4 h-4 text-blue-200" />
+                            <span className={`text-sm font-bold tracking-wider ${timeLeft <= 60 ? 'text-red-300 animate-pulse' : ''}`}>
+                                {formatTime(timeLeft)}
+                            </span>
+                        </div>
+                        <h2 className="text-sm font-bold tracking-wide">Time:</h2>
+                        <select
+                            className="bg-blue-800/50 text-white text-sm font-bold px-3 py-1.5 rounded-lg outline-none border border-blue-700 focus:border-blue-400"
+                            value={selectedDuration}
+                            onChange={(e) => setSelectedDuration(Number(e.target.value))}
+                            disabled={isSubmitting || submitted}
+                        >
+                            {Array.from({length: 11}, (_, i) => i + 5).map(m => (
+                                <option key={m} value={m} className="bg-white text-gray-900">{m} Min</option>
+                            ))}
+                        </select>
+                        <h2 className="text-sm font-bold tracking-wide ml-2">WPM:</h2>
+                        <select
+                            className="bg-blue-800/50 text-white text-sm font-bold px-3 py-1.5 rounded-lg outline-none border border-blue-700 focus:border-blue-400"
+                            value={targetWpm}
+                            onChange={(e) => setTargetWpm(Number(e.target.value))}
+                            disabled={isSubmitting || submitted}
+                        >
+                            {Array.from({length: 12}, (_, i) => 40 + (i * 10)).map(w => (
+                                <option key={w} value={w} className="bg-white text-gray-900">{w} WPM</option>
+                            ))}
+                        </select>
                     </div>
                 </div>
                 <div>
@@ -507,8 +581,9 @@ ORAL ORDER
                                     {/* Editor Content Area */}
                                     <div
                                         ref={editorRef}
-                                        contentEditable={true}
+                                        contentEditable={!submitted && timeLeft > 0}
                                         suppressContentEditableWarning={true}
+                                        onInput={handleInputStart}
                                         className="flex-1 p-8 outline-none font-serif text-lg leading-relaxed overflow-y-auto"
                                         style={{ fontFamily: "'Courier New', Courier, monospace" }}
                                     >

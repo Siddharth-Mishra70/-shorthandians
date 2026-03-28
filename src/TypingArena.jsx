@@ -44,7 +44,15 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
     // Additional state & refs for Typing Arena
     const [inputText, setInputText] = useState('');
     const [isStarted, setIsStarted] = useState(false);
-    const [timeLeft, setTimeLeft] = useState(600); // 10 minutes = 600 seconds
+    const [selectedDuration, setSelectedDuration] = useState(10);
+    const [targetWpm, setTargetWpm] = useState(80);
+    const [timeLeft, setTimeLeft] = useState(600);
+
+    useEffect(() => {
+        if (!isStarted) {
+            setTimeLeft(selectedDuration * 60);
+        }
+    }, [selectedDuration, isStarted]);
     const [wpm, setWpm] = useState(0);
     const [accuracy, setAccuracy] = useState(100);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -296,7 +304,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
     useEffect(() => {
         if (!isStarted || inputText.length === 0) return;
 
-        const timeElapsed = (600 - timeLeft) / 60; // in minutes
+        const timeElapsed = ((selectedDuration * 60) - timeLeft) / 60; // in minutes
         if (timeElapsed > 0) {
             const wordsTyped = inputText.trim().split(/\s+/).length;
             const currentWPM = Math.round(wordsTyped / timeElapsed);
@@ -339,7 +347,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
     const handleReset = () => {
         setInputText('');
         setIsStarted(false);
-        setTimeLeft(600);
+        setTimeLeft(selectedDuration * 60);
         setWpm(0);
         setAccuracy(100);
         setIsPlaying(false);
@@ -374,7 +382,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
             fullMistakes += (typedWords.length - refWords.length);
         }
 
-        const timeElapsedMin = (600 - timeLeft) / 60;
+        const timeElapsedMin = ((selectedDuration * 60) - timeLeft) / 60;
         const validTime = timeElapsedMin > 0 ? timeElapsedMin : 1;
         const totalWords = typedWords.length;
         const deduction = fullMistakes + (halfMistakes * 0.5);
@@ -718,6 +726,30 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                                 <option key={ex.id} value={ex.id} className="bg-white text-gray-900">{ex.title}</option>
                             ))}
                         </select>
+                        <div className="flex items-center space-x-3 ml-4 border-l border-blue-400 pl-4 hidden md:flex">
+                            <h2 className="text-sm font-bold tracking-wide">Time:</h2>
+                            <select
+                                className="bg-blue-800/50 text-white text-sm font-bold px-3 py-1.5 rounded-lg outline-none border border-blue-700 focus:border-blue-400"
+                                value={selectedDuration}
+                                onChange={(e) => setSelectedDuration(Number(e.target.value))}
+                                disabled={isStarted}
+                            >
+                                {Array.from({length: 11}, (_, i) => i + 5).map(m => (
+                                    <option key={m} value={m} className="bg-white text-gray-900">{m} Min</option>
+                                ))}
+                            </select>
+                            <h2 className="text-sm font-bold tracking-wide ml-2">WPM:</h2>
+                            <select
+                                className="bg-blue-800/50 text-white text-sm font-bold px-3 py-1.5 rounded-lg outline-none border border-blue-700 focus:border-blue-400"
+                                value={targetWpm}
+                                onChange={(e) => setTargetWpm(Number(e.target.value))}
+                                disabled={isStarted}
+                            >
+                                {Array.from({length: 12}, (_, i) => 40 + (i * 10)).map(w => (
+                                    <option key={w} value={w} className="bg-white text-gray-900">{w} WPM</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
                     <div className="flex items-center space-x-6 text-sm md:text-base font-semibold">
