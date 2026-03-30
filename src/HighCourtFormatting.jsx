@@ -82,7 +82,6 @@ const HighCourtFormatting = ({ onBack, user }) => {
     const [timeLeft, setTimeLeft] = useState(600);
     const [isTimerRunning, setIsTimerRunning] = useState(false);
     const editorRef = useRef(null);
-    const referenceIframeRef = useRef(null);
 
     const [hcTests, setHcTests] = useState([]);
     const [selectedTestId, setSelectedTestId] = useState(null); // Initialize as null, will be set in useEffect
@@ -331,35 +330,7 @@ ORAL ORDER
 
     // Inject content into the reference iframe whenever displayHtml changes.
     // useEffect is placed AFTER displayHtml declaration (required — can't hoist const).
-    useEffect(() => {
-        const iframe = referenceIframeRef.current;
-        if (!iframe) return;
-        const doc = [
-            '<!DOCTYPE html><html><head><meta charset="UTF-8"/>',
-            '<style>',
-            '*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }',
-            'html, body { width: 100%; background: white; }',
-            'body {',
-            "  font-family: 'Courier New', Courier, monospace;",
-            '  font-size: 14px;',
-            '  line-height: 1.625;',
-            '  color: black;',
-            '  padding: 20px;',
-            '  white-space: pre-wrap;',
-            '  word-wrap: break-word;',
-            '}',
-            'b, strong { font-weight: bold; }',
-            'i, em { font-style: italic; }',
-            'u { text-decoration: underline; }',
-            'center { display: block; text-align: center; }',
-            'div { display: block; }',
-            '</style></head><body>',
-            displayHtml || '<p style="color:#9ca3af;font-style:italic;">Select a test to view the reference document.</p>',
-            '</body></html>'
-        ].join('');
-        iframe.srcdoc = doc;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [displayHtml]);
 
     // Render plain text preserving newlines and punctuation
     const renderFormattedText = (text) => {
@@ -671,17 +642,33 @@ ORAL ORDER
                                         )}
                                     </div>
                                 </div>
-                                {/* iframe fills remaining height */}
-                                <div className="flex-1 relative min-h-0">
+                                {/* Word view — scoped CSS reset prevents Tailwind overriding court alignment */}
+                                <div className="flex-1 relative min-h-0 overflow-auto bg-white">
                                     {selectedTest && docViewMode === 'pdf' && selectedTest.pdf ? (
                                         <iframe src={selectedTest.pdf} className="absolute inset-0 w-full h-full border-none" title="Reference PDF" />
                                     ) : (
-                                        <iframe
-                                            ref={referenceIframeRef}
-                                            className="absolute inset-0 w-full h-full border-none bg-white"
-                                            title="Reference Document"
-                                            sandbox="allow-same-origin"
-                                        />
+                                        <div className="h-full overflow-auto">
+                                            <style>{`
+                                                .hc-ref-doc { all: initial; display: block; }
+                                                .hc-ref-doc * { all: revert; }
+                                                .hc-ref-doc {
+                                                    font-family: 'Courier New', Courier, monospace !important;
+                                                    font-size: 14px !important;
+                                                    line-height: 1.625 !important;
+                                                    color: black !important;
+                                                    padding: 20px !important;
+                                                    white-space: pre-wrap !important;
+                                                    word-wrap: break-word !important;
+                                                    background: white !important;
+                                                    min-height: 100% !important;
+                                                    display: block !important;
+                                                }
+                                            `}</style>
+                                            <div
+                                                className="hc-ref-doc"
+                                                dangerouslySetInnerHTML={{ __html: displayHtml || '<p style="color:#9ca3af;font-style:italic">Select a test to view the reference document.</p>' }}
+                                            />
+                                        </div>
                                     )}
                                 </div>
                             </div>
