@@ -116,33 +116,49 @@ const UploadForm = ({ title, setTitle, text, setText, pdf, setPdf, onFileSelect,
     </div>
 );
 
-const TestList = ({ tests, onDelete, emptyMsg, onEdit }) => (
-    <div className="space-y-3">
-        {tests.length === 0 ? (
-            <div className="bg-white p-10 rounded-xl shadow-sm border border-gray-200 text-center text-gray-400">{emptyMsg}</div>
-        ) : tests.map(t => (
-            <div key={t.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex justify-between items-start group hover:border-red-200 transition-all">
-                <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-gray-800">{t.title}</h4>
-                    <p className="text-xs text-gray-400 mt-1">{t.created_at ? new Date(t.created_at).toLocaleDateString() : t.date}</p>
-                    {(t.original_text || t.text) && (
-                        <p className="text-xs text-gray-500 italic font-serif mt-2 line-clamp-2">{'"'}{(t.original_text || t.text)?.slice(0, 120)}{'..."'}</p>
-                    )}
-                </div>
-                <div className="flex items-center space-x-2 shrink-0 opacity-0 group-hover:opacity-100 transition-all">
-                    {onEdit && (
-                        <button onClick={() => onEdit(t.id)} className="p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all" title="Edit">
-                            <Edit2 className="w-4 h-4" />
+const TestList = ({ tests, onDelete, emptyMsg, onEdit }) => {
+    // Helper to clean up preview text if it's JSON-encoded (High Court style)
+    const getPreviewText = (raw) => {
+        if (!raw) return '';
+        if (raw.trim().startsWith('{') && raw.includes('"plain"')) {
+            try {
+                const parsed = JSON.parse(raw.replace(/\r?\n/g, '\\n'));
+                return parsed.plain || raw;
+            } catch (e) { return raw; }
+        }
+        return raw;
+    };
+
+    return (
+        <div className="space-y-3">
+            {tests.length === 0 ? (
+                <div className="bg-white p-10 rounded-xl shadow-sm border border-gray-200 text-center text-gray-400">{emptyMsg}</div>
+            ) : tests.map(t => (
+                <div key={t.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex justify-between items-start group hover:border-red-200 transition-all">
+                    <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-gray-800">{t.title}</h4>
+                        <p className="text-xs text-gray-400 mt-1">{t.created_at ? new Date(t.created_at).toLocaleDateString() : t.date}</p>
+                        {(t.original_text || t.text) && (
+                            <p className="text-xs text-gray-500 italic font-serif mt-2 line-clamp-2">
+                                {'"'}{getPreviewText(t.original_text || t.text)?.slice(0, 120)}{'..."'}
+                            </p>
+                        )}
+                    </div>
+                    <div className="flex items-center space-x-2 shrink-0 opacity-0 group-hover:opacity-100 transition-all">
+                        {onEdit && (
+                            <button onClick={() => onEdit(t.id)} className="p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all" title="Edit">
+                                <Edit2 className="w-4 h-4" />
+                            </button>
+                        )}
+                        <button onClick={() => onDelete(t.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all" title="Delete">
+                            <Trash2 className="w-4 h-4" />
                         </button>
-                    )}
-                    <button onClick={() => onDelete(t.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all" title="Delete">
-                        <Trash2 className="w-4 h-4" />
-                    </button>
+                    </div>
                 </div>
-            </div>
-        ))}
-    </div>
-);
+            ))}
+        </div>
+    );
+};
 
 const AdminPanel = ({ user, onLogout, supabase }) => {
     const [currentTab, setCurrentTab] = useState('students');
@@ -277,17 +293,31 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
         const syncData = async () => {
             if (!supabase || supabase.supabaseUrl?.includes('placeholder')) return;
             const { data: hc } = await supabase.from('exercises').select('*').eq('category', 'highcourt').order('created_at', { ascending: false });
-            if (hc) setHcTests(hc);
+            if (hc) {
+                const seen = new Set();
+                setHcTests(hc.filter(i => { if (seen.has(i.id)) return false; seen.add(i.id); return true; }));
+            }
             const { data: pit } = await supabase.from('exercises').select('*').eq('category', 'pitman').order('created_at', { ascending: false });
-            if (pit) setPitmanTests(pit);
+            if (pit) {
+                const seen = new Set();
+                setPitmanTests(pit.filter(i => { if (seen.has(i.id)) return false; seen.add(i.id); return true; }));
+            }
             const { data: kc } = await supabase.from('exercises').select('*').eq('category', 'kailash').order('created_at', { ascending: false });
-            if (kc) setKailashTests(kc);
+            if (kc) {
+                const seen = new Set();
+                setKailashTests(kc.filter(i => { if (seen.has(i.id)) return false; seen.add(i.id); return true; }));
+            }
             const { data: comp } = await supabase.from('exercises').select('*').eq('category', 'comprehension').order('created_at', { ascending: false });
-            if (comp) setCompTests(comp);
+            if (comp) {
+                const seen = new Set();
+                setCompTests(comp.filter(i => { if (seen.has(i.id)) return false; seen.add(i.id); return true; }));
+            }
             const { data: aud } = await supabase.from('exercises').select('*').in('category', ['audio', 'Audio Dictation']).order('created_at', { ascending: false });
             if (aud) {
-                // Map the newly requested audio_url column natively into the frontend array struct
-                setAudioTests(aud.map(a => ({ ...a, audio: a.audio_url || a.audio })));
+                // Deduplicate and map audio
+                const seenIds = new Set();
+                const cleanAud = aud.filter(a => { if (seenIds.has(a.id)) return false; seenIds.add(a.id); return true; });
+                setAudioTests(cleanAud.map(a => ({ ...a, audio: a.audio_url || a.audio })));
             }
             
             // Sync Admin Test Results Page

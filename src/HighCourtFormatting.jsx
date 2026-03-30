@@ -26,6 +26,49 @@ import DetailedAnalysisPanel from './DetailedAnalysisPanel';
 import { saveTestResult } from './lib/saveTestResult';
 import { generateDetailedAnalysis } from './lib/generateDetailedAnalysis';
 
+/**
+ * Data Parser Function: Parses rawContent as JSON if possible,
+ * extracts html/plain property, and replaces newlines with <br/> tags.
+ */
+/**
+ * Data Parser Function: Parses rawContent as JSON if possible,
+ * extracts html/plain property, and replaces newlines with <br/> tags.
+ * Now resilient to literal newlines and malformed JSON strings.
+ */
+const getFormattedContent = (rawContent) => {
+    if (!rawContent) return '';
+    let content = rawContent;
+    
+    // Check if it's a potential JSON string
+    const trimmed = String(rawContent).trim();
+    if (trimmed.startsWith('{') && (trimmed.includes('"__hc"') || trimmed.includes('"plain"') || trimmed.includes('"html"'))) {
+        try {
+            // Attempt 1: Direct parse
+            const parsed = JSON.parse(trimmed);
+            if (parsed && (parsed.html || parsed.plain)) {
+                content = parsed.html || parsed.plain;
+            }
+        } catch (e) {
+            // Attempt 2: Resilient parse (fix literal newlines that break standard JSON.parse)
+            try {
+                const fixed = trimmed.replace(/\r?\n/g, '\\n');
+                const parsed = JSON.parse(fixed);
+                if (parsed && (parsed.html || parsed.plain)) {
+                    content = parsed.html || parsed.plain;
+                }
+            } catch (e2) {
+                // Total failure, fallback to raw string but try to stay safe
+                console.warn('getFormattedContent: Failed to parse JSON even after sanitization', e2);
+            }
+        }
+    }
+    
+    // Standardize newline characters and convert to HTML breaks
+    return String(content)
+        .replace(/\\n/g, '\n') // Convert escaped \n to real newlines
+        .replace(/\n/g, '<br/>'); // Convert real newlines to HTML breaks
+};
+
 const HighCourtFormatting = ({ onBack, user }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
@@ -95,15 +138,24 @@ const HighCourtFormatting = ({ onBack, user }) => {
                 try {
                     const parsed = JSON.parse(saved);
                     // Merge unique items from local that aren't in remote (by ID)
-                    const remoteIds = new Set(allHcTests.map(t => t.id));
-                    const uniqueLocal = parsed.filter(t => !remoteIds.has(t.id));
+                    const remoteIds = new Set(allHcTests.map(t => String(t.id)));
+                    const uniqueLocal = parsed.filter(t => !remoteIds.has(String(t.id)));
                     allHcTests = [...allHcTests, ...uniqueLocal];
                 } catch (e) {}
             }
 
-            setHcTests(allHcTests);
-            if (allHcTests.length > 0) {
-                setSelectedTestId(allHcTests[0].id);
+            // 3. Final Deduplication (Security layer against "doubling" items in list)
+            const seenIds = new Set();
+            const finalTests = allHcTests.filter(test => {
+                const idStr = String(test.id);
+                if (seenIds.has(idStr)) return false;
+                seenIds.add(idStr);
+                return true;
+            });
+
+            setHcTests(finalTests);
+            if (finalTests.length > 0) {
+                setSelectedTestId(finalTests[0].id);
             }
 
             // Load past attempts
@@ -195,52 +247,43 @@ ORAL ORDER
     const selectedTest = hcTests.find(t => t.id === selectedTestId);
     const [docViewMode, setDocViewMode] = useState('word');
 
-    // ── Decode HC content — supports 3 storage formats ──────────
-    // Format 1 (new): original_text = JSON { __hc:true, plain:"...", html:"..." }
-    // Format 2 (legacy): original_text = raw HTML string
-    // Format 3 (plain): original_text = plain text, formatted_html = separate field
+    // ── Content Parsing ──────────────────────────────────────────
+    // Decode HC content — supports multiple storage formats
     const decodeHcContent = (test) => {
         if (!test) return { plain: '', html: null };
-        const raw = test.original_text || test.text || '';
+        const raw = String(test.original_text || test.text || '').trim();
 
-        // Format 1: JSON-encoded
-        if (raw.startsWith('{"__hc"')) {
+        // High priority: Standard JSON encoding check
+        if (raw.startsWith('{') && (raw.includes('"__hc"') || raw.includes('"plain"'))) {
             try {
-                const parsed = JSON.parse(raw);
-                if (parsed.__hc) return { plain: parsed.plain || '', html: parsed.html || null };
+                // Try resilient parse for potential literal newlines
+                const sanitized = raw.replace(/\r?\n/g, '\\n');
+                const parsed = JSON.parse(sanitized);
+                if (parsed.__hc || parsed.plain || parsed.html) {
+                    return { plain: parsed.plain || '', html: parsed.html || null };
+                }
             } catch (_) {}
         }
 
-        // Format 3: separate formatted_html field
+        // Secondary priority: Separate formatted_html field
         if (test.formatted_html) {
             return { plain: raw, html: test.formatted_html };
         }
 
-        // Format 2: HTML stored directly in original_text
-        if (/<[a-z][\s\S]*>/i.test(raw)) {
-            return { plain: null, html: raw }; // plain will be derived by stripping
+        // Tertiary priority: Raw HTML string detection
+        // Improved regex to avoid incorrectly matching JSON keys as HTML tags
+        if (/<[^>]+>/.test(raw) && !raw.startsWith('{')) {
+            return { plain: null, html: raw }; 
         }
 
-        // Plain text only
+        // Plain text only fallback
         return { plain: raw, html: null };
     };
-
-    let { plain: decodedPlain, html: decodedHtml } = decodeHcContent(selectedTest);
-
-    // If html is essentially empty (e.g. "<p><br></p>"), treat it as null to trigger plain-text fallback
-    if (decodedHtml) {
-        const tmp = document.createElement('div');
-        tmp.innerHTML = decodedHtml;
-        if (tmp.textContent.trim() === '') {
-            decodedHtml = null;
-        }
-    }
 
     // Strip HTML tags preserving newlines from <br> and <p>
     const stripHtml = (html) => {
         if (!html) return '';
         const tmp = document.createElement('div');
-        // Replace block-level tags with newlines before stripping
         tmp.innerHTML = html
             .replace(/<\/p>/gi, '\n')
             .replace(/<br\s*\/?>/gi, '\n')
@@ -248,12 +291,12 @@ ORAL ORDER
         return (tmp.innerText || tmp.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
     };
 
-    // Answer key: rich HTML shown in reference panel (students replicate this)
-    const answerKeyHtml = decodedHtml;
-    // Plain text reference: used for word-by-word scoring
-    const referenceText = decodedPlain || (decodedHtml ? stripHtml(decodedHtml) : defaultSample);
-    // Plain-text version of the answer key — used for scoring comparison
-    const answerKeyText = answerKeyHtml ? stripHtml(answerKeyHtml) : null;
+    // Raw reference content for UI rendering
+    const referenceText = selectedTest?.original_text || selectedTest?.text || defaultSample;
+
+    // Decoded version for scoring (plain text)
+    const { plain: decodedPlain, html: decodedHtml } = decodeHcContent(selectedTest);
+    const plainReferenceForScoring = decodedPlain || (decodedHtml ? stripHtml(decodedHtml) : defaultSample);
 
     // Render plain text preserving newlines and punctuation
     const renderFormattedText = (text) => {
@@ -293,7 +336,7 @@ ORAL ORDER
 
         try {
             // 1. Generate Automated Analysis for scoring (strict mode to include punctuation)
-            const originalBase = answerKeyText || referenceText;
+            const originalBase = plainReferenceForScoring;
             const analysis = generateDetailedAnalysis(originalBase, resultText, { strict: true });
             const { accuracy, totalMistakes } = analysis.summary;
 
@@ -566,42 +609,22 @@ ORAL ORDER
                                     </div>
                                 </div>
                                 {/* h-full on flex-1 gives a definite height so children with h-full / absolute inset resolve correctly */}
-                                <div className="flex-1 bg-gray-50 relative h-full min-h-0">
-                                    {selectedTest ? (
-                                        docViewMode === 'pdf' && selectedTest.pdf ? (
+                                    <div className="flex-1 bg-gray-200/50 relative h-full min-h-0">
+                                        {selectedTest && docViewMode === 'pdf' && selectedTest.pdf ? (
                                             <iframe src={selectedTest.pdf} className="absolute inset-0 w-full h-full border-none" title="Reference PDF" />
                                         ) : (
-                                            /* WORD VIEW */
-                                            <div className="absolute inset-0 overflow-y-auto">
-                                                <div className="p-6 md:p-8">
-                                                    {answerKeyHtml ? (
-                                                        /* Render admin's rich-formatted HTML — students see exact target format */
-                                                        <div
-                                                            className="bg-white shadow-sm border border-gray-100 p-6 md:p-8 text-sm md:text-base text-gray-900 leading-relaxed whitespace-pre-wrap"
-                                                            style={{ fontFamily: "'Courier New', Courier, monospace" }}
-                                                            dangerouslySetInnerHTML={{ __html: answerKeyHtml }}
-                                                        />
-                                                    ) : (
-                                                        /* Legacy plain-text fallback */
-                                                        <div className="bg-white shadow-sm border border-gray-100 p-6 md:p-8 text-sm md:text-base font-serif text-gray-900 whitespace-pre-wrap leading-relaxed">
-                                                            {renderFormattedText(referenceText)}
-                                                        </div>
-                                                    )}
-                                                </div>
+                                            /* WORD VIEW (A4 Page Style) */
+                                            <div className="absolute inset-0 overflow-y-auto py-8 px-4">
+                                                <div 
+                                                    className="bg-white p-10 md:p-16 shadow-2xl max-w-4xl mx-auto min-h-[1000px] font-mono text-[16px] md:text-[18px] leading-loose text-justify text-black"
+                                                    dangerouslySetInnerHTML={{ __html: getFormattedContent(decodedHtml || decodedPlain || referenceText) }}
+                                                />
+                                                {!selectedTest && (
+                                                    <p className="mt-4 text-center text-xs text-gray-400 font-bold uppercase italic">Viewing default reference format</p>
+                                                )}
                                             </div>
-                                        )
-                                    ) : (
-                                        /* No test selected — show default sample */
-                                        <div className="absolute inset-0 overflow-y-auto">
-                                            <div className="p-6 md:p-8 flex flex-col items-center">
-                                                <div className="bg-white shadow-sm border border-gray-100 p-6 md:p-8 text-sm md:text-base font-serif text-gray-900 whitespace-pre-wrap leading-relaxed w-full">
-                                                    {renderFormattedText(defaultSample)}
-                                                </div>
-                                                <p className="mt-4 text-xs text-gray-400 font-bold uppercase italic">Viewing default reference format</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
+                                        )}
+                                    </div>
                             </div>
                         </div>
 
@@ -646,9 +669,8 @@ ORAL ORDER
                                                 e.preventDefault();
                                             }
                                         }}
+                                        className="flex-1 p-10 md:p-16 outline-none font-mono text-[16px] md:text-[18px] leading-loose text-justify text-black overflow-y-auto"
                                         spellCheck={false}
-                                        className="flex-1 p-8 outline-none font-serif text-lg leading-relaxed overflow-y-auto whitespace-pre-wrap"
-                                        style={{ fontFamily: "'Courier New', Courier, monospace" }}
                                     >
                                         <p><br /></p>
                                     </div>
@@ -667,8 +689,8 @@ ORAL ORDER
                                         <h3 className="font-bold text-gray-800 text-lg">Latest Result ({pastAttempts[0].timestamp})</h3>
                                     </div>
                                     <DetailedAnalysisPanel
-                                        originalText={answerKeyText || referenceText}
-                                        originalHtml={answerKeyHtml}
+                                        originalText={plainReferenceForScoring}
+                                        originalHtml={getFormattedContent(referenceText)}
                                         attemptedText={pastAttempts[0].text}
                                         attemptedHtml={pastAttempts[0].html}
                                         title="Formatting Analysis"
@@ -699,8 +721,8 @@ ORAL ORDER
                                                 <div key={idx} className="opacity-90 transform scale-[0.98] origin-top bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                                                     <div className="text-sm font-bold text-gray-500 mb-2 border-b pb-2">Attempt at {attempt.timestamp}</div>
                                                     <DetailedAnalysisPanel
-                                                        originalText={answerKeyText || referenceText}
-                                                        originalHtml={answerKeyHtml}
+                                                        originalText={plainReferenceForScoring}
+                                                        originalHtml={getFormattedContent(referenceText)}
                                                         attemptedText={attempt.text}
                                                         attemptedHtml={attempt.html}
                                                         title={`Previous Attempt ${pastAttempts.length - 1 - idx}`}
