@@ -646,7 +646,7 @@ ORAL ORDER
                                             /* WORD VIEW (A4 Page Style) */
                                             <div className="absolute inset-0 overflow-y-auto py-8 px-4">
                                                 <div 
-                                                    className="bg-white p-10 md:p-16 shadow-2xl max-w-4xl mx-auto min-h-[1000px] font-mono text-[16px] md:text-[18px] leading-loose text-justify text-black"
+                                                    className="bg-white p-10 md:p-16 shadow-2xl max-w-4xl mx-auto min-h-[1000px] font-mono text-[16px] md:text-[18px] leading-loose text-black whitespace-pre-wrap break-words"
                                                     dangerouslySetInnerHTML={{ __html: displayHtml }}
                                                 />
                                                 {!selectedTest && (
