@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, Activity, CheckCircle2, Share2, X, FileCheck, ArrowLeft, Eye, Clock } from 'lucide-react';
+import { Play, Pause, RotateCcw, Activity, CheckCircle2, Share2, X, FileCheck, ArrowLeft, Eye, Clock, Maximize, Minimize } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { saveTestResult } from './lib/saveTestResult';
 
@@ -157,6 +157,28 @@ const PitmanAPSModule = ({ onBack, onTestComplete }) => {
     const [isSaving, setIsSaving] = useState(false);
     const [hasSubmitted, setHasSubmitted] = useState(false);
     const [attemptId, setAttemptId] = useState(null);
+
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    const toggleFullscreen = () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error(`Error attempting to enable fullscreen: ${err.message}`);
+            });
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+    };
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!document.fullscreenElement);
+        };
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }, []);
 
     useEffect(() => {
         let timer;
@@ -455,6 +477,13 @@ const PitmanAPSModule = ({ onBack, onTestComplete }) => {
                     </div>
                 </div>
                 <div className="flex items-center space-x-4">
+                    <button
+                        onClick={toggleFullscreen}
+                        className="p-1.5 hover:bg-blue-800 rounded-lg transition-colors border border-blue-400/30 flex items-center justify-center text-blue-200 hover:text-white"
+                        title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                    >
+                        {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+                    </button>
                     <select
                         className="bg-blue-800/50 text-white text-sm font-bold px-3 py-1.5 rounded-lg outline-none border border-blue-700 focus:border-blue-400"
                         value={selectedExercise.id}
@@ -485,36 +514,6 @@ const PitmanAPSModule = ({ onBack, onTestComplete }) => {
                 </div>
             </div>
 
-            {/* Audio Controller */}
-            <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm">
-                <div className="flex items-center space-x-4">
-                    <button onClick={togglePlayPause} className="w-10 h-10 bg-[#1e3a8a] text-white rounded-full flex items-center justify-center shadow-md hover:bg-blue-800 transition-colors">
-                        {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-1" />}
-                    </button>
-                    <button onClick={resetAudio} className="w-8 h-8 text-gray-500 hover:text-[#1e3a8a] transition-colors rounded-full" title="Restart Dictation">
-                        <RotateCcw className="w-4 h-4" />
-                    </button>
-                    <div className="hidden sm:flex flex-col ml-2 w-32 md:w-64">
-                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Dictation Progress</span>
-                        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-[#1e3a8a] transition-all duration-100 ease-linear" style={{ width: `${audioProgress}%` }}></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-lg p-1">
-                    <span className="text-xs font-bold text-gray-500 px-2 uppercase tracking-wide">Target Speed:</span>
-                    {[40, 50, 60, 80, 90, 100].map(speed => (
-                        <button
-                            key={speed}
-                            onClick={() => handleSpeedChange(speed)}
-                            className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${playbackSpeed === speed ? 'bg-[#1e3a8a] text-white shadow-sm' : 'text-gray-600 hover:bg-gray-200'}`}
-                        >
-                            {speed} WPM
-                        </button>
-                    ))}
-                </div>
-            </div>
 
             <div className="flex-1 max-w-[1600px] w-full mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
 
@@ -563,9 +562,9 @@ const PitmanAPSModule = ({ onBack, onTestComplete }) => {
                                     <option value={900}>15 mins</option>
                                 </select>
                             )}
-                            <div className="flex items-center space-x-2">
-                                <Clock className="w-4 h-4 text-gray-400" />
-                                <span className={`font-mono font-bold text-lg ${timeLeft <= 60 ? 'text-red-500 animate-pulse' : 'text-gray-700'}`}>
+                            <div className="flex items-center space-x-2 bg-gray-100 px-3 py-1.5 rounded-xl border border-gray-200 shadow-sm">
+                                <Clock className="w-5 h-5 text-gray-500" />
+                                <span className={`font-mono font-black text-2xl tracking-wider ${timeLeft <= 60 ? 'text-red-600 animate-pulse' : 'text-[#1e3a8a]'}`}>
                                     {formatTime(timeLeft)}
                                 </span>
                             </div>
@@ -577,9 +576,9 @@ const PitmanAPSModule = ({ onBack, onTestComplete }) => {
                         placeholder="Start typing your transcription here... (Timer starts automatically)"
                         value={inputText}
                         onChange={handleInputChange}
-                        onCopy={e => e.preventDefault()}
-                        onPaste={e => e.preventDefault()}
-                        onContextMenu={e => e.preventDefault()}
+                        onCopy={(e) => { e.preventDefault(); alert("Copying is disabled!"); }}
+                        onPaste={(e) => { e.preventDefault(); alert("Pasting is disabled!"); }}
+                        onContextMenu={(e) => { e.preventDefault(); }}
                         disabled={timeLeft === 0 || hasSubmitted}
                         spellCheck="false"
                     />

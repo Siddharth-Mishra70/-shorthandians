@@ -427,12 +427,11 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
         // Try Supabase sync
         if (supabase && !supabase.supabaseUrl?.includes('placeholder')) {
             try {
-                // Determine appropriate DB column names for the shared exercises table
+                // Only send columns confirmed to exist in Supabase schema
+                const hcEncoded = isHc ? JSON.stringify({ __hc: true, plain: qTextStripped, html: qHtml, job_title: globalJobTitle || '', test_type: globalTestType || '' }) : null;
                 const dbPayload = {
                     title: newItem.title,
-                    job_title: globalJobTitle,
-                    test_type: globalTestType,
-                    original_text: isHc ? newItem.formatted_html : newItem.original_text,
+                    original_text: isHc ? hcEncoded : quickText,
                     category: quickModule === 'audio' ? 'Audio Dictation' : quickModule,
                     audio_url: quickModule === 'audio' ? newItem.audio : undefined,
                     image_url: quickModule === 'pitman' ? newItem.pdf : undefined
@@ -593,13 +592,11 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
                     finalAudioUrl = publicUrl;
                 }
 
-                // 3. Save to DB exactly to the remote schema column names explicitly given by user
+                // 3. Save to DB using only confirmed schema columns
                 const dbPayload = {
                     title: audioTitle,
-                    job_title: globalJobTitle,
-                    test_type: globalTestType,
-                    audio_url: finalAudioUrl, // Needs to match user's custom created DB column 
-                    category: 'Audio Dictation', // Explicit user mapping
+                    audio_url: finalAudioUrl,
+                    category: 'Audio Dictation',
                     original_text: pendingAudioText
                 };
 
@@ -706,12 +703,20 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
         
         try {
             if (supabase && !supabase.supabaseUrl?.includes('placeholder')) {
-                // Stripped down Payload to precisely match the remote DB schema without throwing 400 errors
+                // Pack ALL metadata into original_text JSON — avoids issues with missing DB columns.
+                // Only 'title', 'original_text', 'category' are guaranteed to exist in the exercises table.
+                const encodedContent = JSON.stringify({
+                    __hc: true,
+                    plain: editorText.trim(),
+                    html: editorHtml,
+                    job_title: globalJobTitle || '',
+                    test_type: globalTestType || ''
+                });
+
+                // Only send columns confirmed to exist in Supabase schema
                 const dbPayload = {
                     title: hcTitle,
-                    job_title: globalJobTitle,
-                    test_type: globalTestType,
-                    original_text: editorHtml, // Mapped to the HTML string as originally requested
+                    original_text: encodedContent,
                     category: 'highcourt'
                 };
 
@@ -1104,7 +1109,7 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
                                     ref={hcEditorRef}
                                     contentEditable
                                     suppressContentEditableWarning
-                                    className="min-h-[200px] p-5 border border-t-0 border-gray-200 rounded-b-lg outline-none font-serif text-sm leading-relaxed bg-white"
+                                    className="min-h-[200px] p-5 border border-t-0 border-gray-200 rounded-b-lg outline-none font-serif text-sm leading-relaxed bg-white whitespace-pre-wrap"
                                     style={{ fontFamily: "'Courier New', Courier, monospace" }}
                                     onInput={() => setHcFormattedHtml(hcEditorRef.current?.innerHTML || '')}
                                     data-placeholder="Type the correctly formatted court text here. Apply bold, center, underline, etc. Students will only see unformatted plain text — this HTML is the answer key."
@@ -1884,13 +1889,39 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
                                                 </p>
                                             </div>
                                         </div>
-                                        <button 
-                                            onClick={() => openQuickEdit(item, item.mod)}
-                                            className="p-1.5 text-gray-400 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all"
-                                            title="Quick Edit"
-                                        >
-                                            <Edit3 className="w-4 h-4" />
-                                        </button>
+                                        <div className="flex items-center space-x-1">
+                                            <button 
+                                                onClick={() => openQuickEdit(item, item.mod)}
+                                                className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
+                                                title="Quick Edit"
+                                            >
+                                                <Edit3 className="w-4 h-4" />
+                                            </button>
+                                            <button 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (!window.confirm('Delete this recent item?')) return;
+                                                    if (supabase && !supabase.supabaseUrl?.includes('placeholder')) {
+                                                        supabase.from('exercises').delete().eq('id', item.id).then(()=>{});
+                                                    }
+                                                    if (item.mod === 'highcourt') {
+                                                        const up = hcTests.filter(t => t.id !== item.id); setHcTests(up); localStorage.setItem('admin_highcourt_data_list', JSON.stringify(up));
+                                                    } else if (item.mod === 'pitman') {
+                                                        const up = pitmanTests.filter(t => t.id !== item.id); setPitmanTests(up); localStorage.setItem('admin_pitman_data_list', JSON.stringify(up));
+                                                    } else if (item.mod === 'kailash') {
+                                                        const up = kailashTests.filter(t => t.id !== item.id); setKailashTests(up); localStorage.setItem('admin_kailash_data_list', JSON.stringify(up));
+                                                    } else if (item.mod === 'audio') {
+                                                        const up = audioTests.filter(t => t.id !== item.id); setAudioTests(up); localStorage.setItem('admin_audio_data_list', JSON.stringify(up));
+                                                    } else if (item.mod === 'comprehension') {
+                                                        const up = compTests.filter(t => t.id !== item.id); setCompTests(up); localStorage.setItem('admin_comprehension_data_list', JSON.stringify(up));
+                                                    }
+                                                }}
+                                                className="p-1.5 text-gray-400 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all"
+                                                title="Delete"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>

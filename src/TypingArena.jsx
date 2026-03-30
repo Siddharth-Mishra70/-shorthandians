@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, Volume2, FastForward, Clock, Activity, CheckCircle2, Share2, X, FileCheck, TrendingUp, Headphones, ArrowLeft } from 'lucide-react';
+import { Play, Pause, RotateCcw, Volume2, FastForward, Clock, Activity, CheckCircle2, Share2, X, FileCheck, TrendingUp, Headphones, ArrowLeft, Maximize, Minimize } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { saveTestResult } from './lib/saveTestResult';
 
@@ -68,6 +68,28 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
     const [isSaving, setIsSaving] = useState(false);
     const [attemptId, setAttemptId] = useState(null);
 
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    const toggleFullscreen = () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error(`Error attempting to enable fullscreen: ${err.message}`);
+            });
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+    };
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!document.fullscreenElement);
+        };
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }, []);
+
     // Test Countdown Effect
     useEffect(() => {
         let timer;
@@ -83,12 +105,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                 if (textareaRef.current) {
                     textareaRef.current.focus();
                 }
-                // Automatically start audio for dictation exercises
-                if (selectedExercise?.isAudioCourse && audioRef.current) {
-                    audioRef.current.playbackRate = playbackSpeed;
-                    audioRef.current.play().catch(e => console.warn("Audio auto-play failed:", e));
-                    setIsPlaying(true);
-                }
+                // Audio is now manual-play exclusively; auto-play has been disabled
             }, 100);
         }
         return () => clearTimeout(timer);
@@ -797,6 +814,13 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
 
                         {/* Moved Buttons from Bottom to Header */}
                         <div className="flex items-center space-x-2 pl-4 border-l border-blue-400">
+                            <button
+                                onClick={toggleFullscreen}
+                                className="w-9 h-9 flex items-center justify-center bg-white/10 hover:bg-white/20 border border-white/40 text-white rounded-xl transition-all active:scale-95 mr-2"
+                                title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                            >
+                                {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+                            </button>
                             <button
                                 onClick={handleReset}
                                 className="px-4 py-2 bg-white/10 hover:bg-red-500/20 border border-white/20 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all active:scale-95"

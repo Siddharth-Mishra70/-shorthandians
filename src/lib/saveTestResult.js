@@ -61,31 +61,28 @@ export async function saveTestResult(supabase, params) {
         .select()
         .single();
 
-      // 3. Strict Error Catching (ASLI Deep Inspection)
       if (error) {
-        const errorString = JSON.stringify(error, null, 2);
-        console.error("SUPABASE ASLI ERROR:", errorString);
-        alert("Database Error Details: " + errorString);
-        return;
+        console.error("SUPABASE ASLI ERROR:", JSON.stringify(error, null, 2));
+        throw new Error(error.message || "Database insert error");
       }
 
       // 4. Success Catch
       console.log("[saveTestResult] SUCCESS:", data);
-      alert("Test Results Saved Successfully!");
       return { attemptId: data.id, ...data };
     } else {
       throw new Error('Supabase client not initialized or using placeholders');
     }
   } catch (error) {
-    console.error('[saveTestResult] FATAL ERROR:', error);
-    alert("Connection Error: " + (error?.message || "Failed to reach database"));
+    console.warn('[saveTestResult] Falling back to local storage due to error:', error?.message);
     
     /* ── LocalStorage Fallback ────────────────────────────────── */
     const localKey = 'stn_local_results';
+    const attemptId = 'local_' + Date.now();
     const localData = JSON.parse(localStorage.getItem(localKey) || '[]');
-    localData.push({ ...row, created_at: new Date().toISOString() });
+    const localEntry = { ...row, id: attemptId, created_at: new Date().toISOString() };
+    localData.push(localEntry);
     localStorage.setItem(localKey, JSON.stringify(localData.slice(-50)));
-    return { attemptId: 'local_' + Date.now(), localOnly: true };
+    return { attemptId, localOnly: true };
   }
 }
 
@@ -97,21 +94,31 @@ export async function saveTestResult(supabase, params) {
 export async function fetchTestResult(supabase, attemptId) {
   if (!attemptId) throw new Error('fetchTestResult: attemptId is required.');
 
-  try {
-    if (supabase && !supabase.supabaseUrl.includes('placeholder')) {
-      const { data, error } = await supabase
-        .from('test_results')
-        .select('*')
-        .eq('id', attemptId)
-        .single();
-      if (!error && data) return data;
-    }
-  } catch (err) {}
+  // If it's a locally-saved result, skip Supabase entirely
+  const isLocal = String(attemptId).startsWith('local_');
 
-  // Local lookup
-  const local = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
-  const match = local.find(r => r.id === attemptId);
-  if (match) return match;
+  if (!isLocal) {
+    try {
+      if (supabase && !supabase.supabaseUrl.includes('placeholder')) {
+        const { data, error } = await supabase
+          .from('test_results')
+          .select('*')
+          .eq('id', attemptId)
+          .single();
+        if (!error && data) return data;
+      }
+    } catch (err) {
+      console.warn('[fetchTestResult] Supabase lookup failed, checking local storage.');
+    }
+  }
+
+  // Local lookup — check both keys for compatibility
+  const localKeys = ['stn_local_results', 'shorthandians_local_results'];
+  for (const key of localKeys) {
+    const local = JSON.parse(localStorage.getItem(key) || '[]');
+    const match = local.find(r => r.id === attemptId);
+    if (match) return match;
+  }
 
   throw new Error('Result not found in Database or LocalStorage.');
 }

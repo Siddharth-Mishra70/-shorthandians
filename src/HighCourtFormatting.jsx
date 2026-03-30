@@ -18,7 +18,9 @@ import {
     ChevronDown,
     ChevronUp,
     Keyboard,
-    Clock
+    Clock,
+    Maximize,
+    Minimize
 } from 'lucide-react';
 import DetailedAnalysisPanel from './DetailedAnalysisPanel';
 import { saveTestResult } from './lib/saveTestResult';
@@ -40,7 +42,28 @@ const HighCourtFormatting = ({ onBack, user }) => {
 
     const [hcTests, setHcTests] = useState([]);
     const [selectedTestId, setSelectedTestId] = useState(null); // Initialize as null, will be set in useEffect
-    
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    const toggleFullscreen = () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error(`Error attempting to enable fullscreen: ${err.message}`);
+            });
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+    };
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!document.fullscreenElement);
+        };
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }, []);
+
     // Auto-sync with storage on mount and update selectedTestId
     React.useEffect(() => {
         const loadTests = async () => {
@@ -172,34 +195,74 @@ ORAL ORDER
     const selectedTest = hcTests.find(t => t.id === selectedTestId);
     const [docViewMode, setDocViewMode] = useState('word');
 
-    // Smart detection for HTML tags in original_text (Fallback schema support)
-    const hasHtmlTags = /<[a-z][\s\S]*>/i.test(selectedTest?.original_text || selectedTest?.text || '');
-    
-    // Admin's formatted HTML answer key — displayed in reference panel
-    const answerKeyHtml = selectedTest?.formatted_html || (hasHtmlTags ? selectedTest?.original_text || selectedTest?.text : null);
-    
-    // Strip HTML tags to get clean plain text for word-by-word analysis
+    // ── Decode HC content — supports 3 storage formats ──────────
+    // Format 1 (new): original_text = JSON { __hc:true, plain:"...", html:"..." }
+    // Format 2 (legacy): original_text = raw HTML string
+    // Format 3 (plain): original_text = plain text, formatted_html = separate field
+    const decodeHcContent = (test) => {
+        if (!test) return { plain: '', html: null };
+        const raw = test.original_text || test.text || '';
+
+        // Format 1: JSON-encoded
+        if (raw.startsWith('{"__hc"')) {
+            try {
+                const parsed = JSON.parse(raw);
+                if (parsed.__hc) return { plain: parsed.plain || '', html: parsed.html || null };
+            } catch (_) {}
+        }
+
+        // Format 3: separate formatted_html field
+        if (test.formatted_html) {
+            return { plain: raw, html: test.formatted_html };
+        }
+
+        // Format 2: HTML stored directly in original_text
+        if (/<[a-z][\s\S]*>/i.test(raw)) {
+            return { plain: null, html: raw }; // plain will be derived by stripping
+        }
+
+        // Plain text only
+        return { plain: raw, html: null };
+    };
+
+    let { plain: decodedPlain, html: decodedHtml } = decodeHcContent(selectedTest);
+
+    // If html is essentially empty (e.g. "<p><br></p>"), treat it as null to trigger plain-text fallback
+    if (decodedHtml) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = decodedHtml;
+        if (tmp.textContent.trim() === '') {
+            decodedHtml = null;
+        }
+    }
+
+    // Strip HTML tags preserving newlines from <br> and <p>
     const stripHtml = (html) => {
         if (!html) return '';
         const tmp = document.createElement('div');
-        tmp.innerHTML = html;
-        return (tmp.innerText || tmp.textContent || '').trim();
+        // Replace block-level tags with newlines before stripping
+        tmp.innerHTML = html
+            .replace(/<\/p>/gi, '\n')
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/div>/gi, '\n');
+        return (tmp.innerText || tmp.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
     };
 
-    // Plain text shown to student as reference (no formatting clues)
-    const referenceText = hasHtmlTags ? stripHtml(selectedTest?.original_text || selectedTest?.text) : (selectedTest?.original_text?.trim() || selectedTest?.text?.trim() || defaultSample);
+    // Answer key: rich HTML shown in reference panel (students replicate this)
+    const answerKeyHtml = decodedHtml;
+    // Plain text reference: used for word-by-word scoring
+    const referenceText = decodedPlain || (decodedHtml ? stripHtml(decodedHtml) : defaultSample);
     // Plain-text version of the answer key — used for scoring comparison
     const answerKeyText = answerKeyHtml ? stripHtml(answerKeyHtml) : null;
 
-    // Help to render text by ensuring real newlines and JSX breaks
+    // Render plain text preserving newlines and punctuation
     const renderFormattedText = (text) => {
-        // Ultimate fallback to ensure NO blank areas
         const content = text || referenceText || defaultSample;
+        // Normalize escaped newlines
         const cleanText = String(content).replace(/\\n/g, '\n');
-        
         return cleanText.split('\n').map((line, i) => (
             <React.Fragment key={i}>
-                {line}
+                {line || '\u00A0' /* non-breaking space to preserve blank lines */}
                 <br />
             </React.Fragment>
         ));
@@ -229,9 +292,9 @@ ORAL ORDER
         setIsSubmitting(true);
 
         try {
-            // 1. Generate Automated Analysis for scoring
+            // 1. Generate Automated Analysis for scoring (strict mode to include punctuation)
             const originalBase = answerKeyText || referenceText;
-            const analysis = generateDetailedAnalysis(originalBase, resultText);
+            const analysis = generateDetailedAnalysis(originalBase, resultText, { strict: true });
             const { accuracy, totalMistakes } = analysis.summary;
 
             // 2. Save via Utility to Primary DB (test_results)
@@ -257,7 +320,7 @@ ORAL ORDER
         } finally {
             // Update local UI state
             setFinalText(resultText);
-            const newAttempt = { text: resultText, timestamp: new Date().toLocaleString() };
+            const newAttempt = { text: resultText, html: htmlContent, timestamp: new Date().toLocaleString() };
             const updatedAttempts = [newAttempt, ...pastAttempts];
             setPastAttempts(updatedAttempts);
             localStorage.setItem('hc_formatting_attempts', JSON.stringify(updatedAttempts));
@@ -404,14 +467,14 @@ ORAL ORDER
                         <Gavel className="w-6 h-6 text-blue-200" />
                         <h2 className="text-xl font-bold tracking-wide">High Court Formatting Module</h2>
                     </div>
-                    <div className="flex items-center space-x-3 ml-6 border-l border-blue-400 pl-6">
-                        <div className="flex items-center space-x-2 bg-blue-800/50 px-3 py-1.5 rounded-lg mr-2">
-                            <Clock className="w-4 h-4 text-blue-200" />
-                            <span className={`text-sm font-bold tracking-wider ${timeLeft <= 60 ? 'text-red-300 animate-pulse' : ''}`}>
+                    <div className="flex items-center space-x-4 ml-6 border-l border-blue-400 pl-6">
+                        <div className="flex items-center space-x-3 bg-red-600 px-5 py-2 rounded-xl shadow-[0_0_15px_rgba(220,38,38,0.5)] border border-red-400">
+                            <Clock className="w-6 h-6 text-white" />
+                            <span className={`text-2xl font-black tracking-widest text-white drop-shadow-md ${timeLeft <= 60 ? 'animate-pulse text-red-200' : ''}`}>
                                 {formatTime(timeLeft)}
                             </span>
                         </div>
-                        <h2 className="text-sm font-bold tracking-wide">Time:</h2>
+                        <h2 className="text-sm font-bold tracking-wide ml-2">Time:</h2>
                         <select
                             className="bg-blue-800/50 text-white text-sm font-bold px-3 py-1.5 rounded-lg outline-none border border-blue-700 focus:border-blue-400"
                             value={selectedDuration}
@@ -435,7 +498,14 @@ ORAL ORDER
                         </select>
                     </div>
                 </div>
-                <div>
+                <div className="flex items-center space-x-3">
+                    <button
+                        onClick={toggleFullscreen}
+                        className="p-2 hover:bg-blue-800 rounded-full transition-colors border border-blue-400/30 flex items-center justify-center text-blue-200 hover:text-white"
+                        title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                    >
+                        {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+                    </button>
                     {submitted ? (
                         <button
                             onClick={handleRetake}
@@ -460,29 +530,13 @@ ORAL ORDER
                 </div>
             </div>
 
-            <div className="flex-1 max-w-[1600px] w-full mx-auto flex flex-col overflow-hidden p-4 lg:p-6 gap-6">
+            <div className="flex-1 w-full flex flex-col overflow-hidden p-0">
                 {!submitted || !finalText ? (
-                    <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+                    <div className="flex-1 flex flex-col gap-0 overflow-hidden bg-gray-300">
                         {/* Top Half: PDF or Sample Document */}
-                        <div className="h-[40vh] min-h-[250px] flex gap-4 overflow-hidden">
-                            {/* Rules Sidebar (Collapsible/Small) */}
-                            <div className="hidden lg:flex flex-col bg-white border-l-4 border-[#1e3a8a] shadow-sm p-4 rounded-xl w-64 shrink-0 overflow-y-auto">
-                                <h3 className="font-bold text-sm border-b pb-2 mb-3 text-gray-800 flex items-center space-x-2">
-                                    <FileText className="w-4 h-4 text-[#1e3a8a]" />
-                                    <span>Guidelines</span>
-                                </h3>
-                                <ul className="space-y-2 text-xs text-gray-700">
-                                    {rules.map((rule, idx) => (
-                                        <li key={idx} className="flex items-start">
-                                            <span className="text-[#1e3a8a] mr-1.5">•</span>
-                                            <span>{rule}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-
+                        <div className="h-[40vh] min-h-[250px] flex overflow-hidden border-b-2 border-gray-300">
                             {/* Reference Content */}
-                            <div className="flex-1 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+                            <div className="flex-1 bg-white overflow-hidden flex flex-col">
                                 <div className="bg-gray-100 px-4 py-2 border-b text-xs font-bold text-gray-600 uppercase tracking-wider flex justify-between items-center">
                                     <div className="flex items-center space-x-4">
                                         <span className="font-black text-[#1e3a8a]">{selectedTest?.title || 'No Test Selected'}</span>
@@ -523,7 +577,7 @@ ORAL ORDER
                                                     {answerKeyHtml ? (
                                                         /* Render admin's rich-formatted HTML — students see exact target format */
                                                         <div
-                                                            className="bg-white shadow-sm border border-gray-100 p-6 md:p-8 text-sm md:text-base text-gray-900 leading-relaxed"
+                                                            className="bg-white shadow-sm border border-gray-100 p-6 md:p-8 text-sm md:text-base text-gray-900 leading-relaxed whitespace-pre-wrap"
                                                             style={{ fontFamily: "'Courier New', Courier, monospace" }}
                                                             dangerouslySetInnerHTML={{ __html: answerKeyHtml }}
                                                         />
@@ -552,14 +606,14 @@ ORAL ORDER
                         </div>
 
                         {/* Bottom Half: Editor */}
-                        <div className="flex-1 flex flex-col bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden min-h-0">
+                        <div className="flex-1 flex flex-col bg-white overflow-hidden min-h-0">
                             <div className="bg-gray-100 px-4 py-2 border-b text-xs font-bold text-gray-600 uppercase tracking-wider flex justify-between items-center">
                                 <span>Your Editor Workspace</span>
                                 <span className="text-gray-400 font-normal">Apply Bold, Italics, and Alignment carefully</span>
                             </div>
                             
-                            <div className="flex-1 p-3 bg-gray-50 flex flex-col min-h-0">
-                                <div className="bg-white h-full shadow-sm border border-gray-300 rounded overflow-hidden flex flex-col">
+                            <div className="flex-1 flex flex-col min-h-0">
+                                <div className="bg-white h-full overflow-hidden flex flex-col">
                                     {/* Custom Toolbar */}
                                     <div className="flex items-center gap-1 p-1.5 border-b bg-gray-50 overflow-x-auto shrink-0">
                                         <div className="flex space-x-0.5 border-r pr-1.5 mr-1.5">
@@ -584,7 +638,16 @@ ORAL ORDER
                                         contentEditable={!submitted && timeLeft > 0}
                                         suppressContentEditableWarning={true}
                                         onInput={handleInputStart}
-                                        className="flex-1 p-8 outline-none font-serif text-lg leading-relaxed overflow-y-auto"
+                                        onCopy={(e) => { e.preventDefault(); alert("Copying is disabled!"); }}
+                                        onPaste={(e) => { e.preventDefault(); alert("Pasting is disabled!"); }}
+                                        onContextMenu={(e) => { e.preventDefault(); }}
+                                        onKeyDown={(e) => {
+                                            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) {
+                                                e.preventDefault();
+                                            }
+                                        }}
+                                        spellCheck={false}
+                                        className="flex-1 p-8 outline-none font-serif text-lg leading-relaxed overflow-y-auto whitespace-pre-wrap"
                                         style={{ fontFamily: "'Courier New', Courier, monospace" }}
                                     >
                                         <p><br /></p>
@@ -607,6 +670,7 @@ ORAL ORDER
                                         originalText={answerKeyText || referenceText}
                                         originalHtml={answerKeyHtml}
                                         attemptedText={pastAttempts[0].text}
+                                        attemptedHtml={pastAttempts[0].html}
                                         title="Formatting Analysis"
                                     />
                                 </div>
@@ -638,6 +702,7 @@ ORAL ORDER
                                                         originalText={answerKeyText || referenceText}
                                                         originalHtml={answerKeyHtml}
                                                         attemptedText={attempt.text}
+                                                        attemptedHtml={attempt.html}
                                                         title={`Previous Attempt ${pastAttempts.length - 1 - idx}`}
                                                     />
                                                 </div>

@@ -4,7 +4,7 @@ import {
   AlertTriangle, Type, MinusCircle, PlusCircle, Hash,
   FileText, TrendingUp, User, Calendar, Loader2,
   BarChart2, Eye, ChevronRight, Award, Zap, Target,
-  BookOpen, RefreshCw, Clock,
+  BookOpen, RefreshCw, Clock, Maximize, Minimize,
 } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { fetchTestResult, fetchAllResults } from './lib/saveTestResult';
@@ -15,7 +15,7 @@ import TypingPracticeWidget from './TypingPracticeWidget';
 // Demo / fallback data
 // ─────────────────────────────────────────────────────────────────────────────
 const DEMO_DATA = {
-  studentName: 'Rahul Verma',
+  studentName: 'My Performance',
   date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }),
   exercise: 'Kailash Chandra Vol. 1 — Exercise 3',
   speed: '80 WPM',
@@ -271,25 +271,47 @@ const HighlightedComparison = ({ originalText, attemptedText }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user }) => {
   const reportRef = useRef(null);
+  const [currentAttemptId, setCurrentAttemptId] = useState(attemptId);
   const [liveData, setLiveData] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [loading, setLoading] = useState(!!attemptId);
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');  // 'overview' | 'comparison' | 'history' | 'practice'
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // ── Fetch real attempt from Supabase if attemptId is given ──
   useEffect(() => {
-    if (!attemptId) return;
+    const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => console.error(err));
+    } else {
+      if (document.exitFullscreen) document.exitFullscreen();
+    }
+  };
+
+  // ── Sync prop changes ──
+  useEffect(() => {
+    setCurrentAttemptId(attemptId);
+  }, [attemptId]);
+
+  // ── Fetch real attempt from Supabase if attempting ID is given ──
+  useEffect(() => {
+    if (!currentAttemptId) return;
     setLoading(true);
 
-    fetchTestResult(supabase, attemptId)
+    fetchTestResult(supabase, currentAttemptId)
       .then(async (row) => {
         // 1. Extract attempted_text from mistakes_data JSONB
         const attemptedText = row.mistakes_data?.attempted_text ?? row.attempted_text ?? '';
 
         // 2. Fetch original_text from mistakes_data or exercises table
         let originalText = row.mistakes_data?.original_text ?? '';
+        let originalHtml = null;
         let exerciseTitle = row.exercise_id ?? '—';
 
         // If no original text in mistakes_data, try fetching from exercises table (UUID check)
@@ -299,16 +321,37 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user }) => {
           try {
             const { data: ex, error: exErr } = await supabase
               .from('exercises')
-              .select('title, original_text')
+              .select('title, original_text, formatted_html')
               .eq('id', row.exercise_id)
               .single();
             if (!exErr && ex) {
               originalText = ex.original_text ?? '';
               exerciseTitle = ex.title ?? exerciseTitle;
+              if (ex.formatted_html) originalHtml = ex.formatted_html;
             }
           } catch (_) {
             console.warn('[ResultAnalysisPage] Could not fetch exercise original_text');
           }
+        }
+
+        // Decode High Court JSON formatting if present
+        if (originalText && originalText.startsWith('{"__hc"')) {
+            try {
+                const parsed = JSON.parse(originalText);
+                if (parsed.__hc) {
+                    originalText = parsed.plain || '';
+                    if (parsed.html) originalHtml = parsed.html;
+                }
+            } catch (e) {}
+        } else if (originalText && /<[a-z][\s\S]*>/i.test(originalText) && !originalHtml) {
+            // Legacy HTML fallback
+            originalHtml = originalText;
+            const tmp = document.createElement('div');
+            tmp.innerHTML = originalHtml
+                .replace(/<\/p>/gi, '\n')
+                .replace(/<br\s*\/?>/gi, '\n')
+                .replace(/<\/div>/gi, '\n');
+            originalText = (tmp.innerText || tmp.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
         }
 
         // 3. Map → component data shape
@@ -330,11 +373,13 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user }) => {
           extraCount:       row.extra_count        ?? 0,
           accuracy:         row.accuracy           ?? 0,
           original:         originalText,
+          originalHtml:     originalHtml,
           typed:            attemptedText,
           missingWords:     row.missing_words      ?? [],
           extraWords:       row.extra_words        ?? [],
           spellingErrors:   row.spelling_errors    ?? [],
           capitalErrors:    row.capital_errors     ?? [],
+          attemptedHtml:    row.mistakes_data?.html_content ?? null,
         });
       })
       .catch((err) => {
@@ -342,7 +387,7 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user }) => {
         setLoadError(err.message);
       })
       .finally(() => setLoading(false));
-  }, [attemptId]);
+  }, [currentAttemptId]);
 
   // ── Fetch History ──
   useEffect(() => {
@@ -367,13 +412,18 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user }) => {
           }
         }));
         setHistory(enriched);
+        
+        // Auto-select the most recent test if none exists and user just clicked 'My Performance'
+        if (!currentAttemptId && enriched.length > 0) {
+            setCurrentAttemptId(enriched[0].id);
+        }
       })
       .catch(err => console.error('History fetch error:', err))
       .finally(() => setLoadingHistory(false));
-  }, [attemptId, user]);
+  }, [attemptId, currentAttemptId, user]);
 
-  // Resolved data: live DB > prop > demo
-  const data = liveData ?? propData ?? DEMO_DATA;
+  // Resolved data: live DB > prop > adjusted demo data
+  const data = liveData ?? propData ?? { ...DEMO_DATA, studentName: user?.name || DEMO_DATA.studentName };
   const handlePrint = () => window.print();
 
   // ── Loading skeleton ──
@@ -458,7 +508,7 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user }) => {
 
       {/* ── Sticky Action Bar ─────────────────────────────────── */}
       <div className="print:hidden sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           {onBack && (
             <button
               onClick={onBack}
@@ -489,6 +539,14 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user }) => {
 
           <div className="flex items-center space-x-2">
             <button
+              onClick={toggleFullscreen}
+              className="flex items-center space-x-1.5 border-2 border-gray-200 text-gray-500 hover:border-[#1e3a8a] hover:text-[#1e3a8a] font-bold px-3 py-2 rounded-xl transition-colors text-xs"
+              title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+            >
+              {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+            </button>
+            <button
               onClick={handlePrint}
               className="flex items-center space-x-1.5 border-2 border-gray-200 text-gray-500 hover:border-[#1e3a8a] hover:text-[#1e3a8a] font-bold px-3 py-2 rounded-xl transition-colors text-xs"
             >
@@ -510,7 +568,7 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user }) => {
       <div
         ref={reportRef}
         id="printable-report"
-        className="max-w-5xl mx-auto my-6 print:my-0 bg-white rounded-3xl shadow-xl print:shadow-none print:rounded-none overflow-hidden"
+        className="max-w-7xl mx-auto my-6 print:my-0 bg-white rounded-3xl shadow-xl print:shadow-none print:rounded-none overflow-hidden"
       >
         {/* ── Gradient Header ────────────────────────────────── */}
         <div
@@ -687,23 +745,13 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user }) => {
           {/* ══ COMPARISON TAB ════════════════════════════════════ */}
           {activeTab === 'comparison' && (
             <div className="print:hidden space-y-5">
-              <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                <Eye className="w-4 h-4 text-[#1e3a8a]" /> Detailed Mistake Breakdown
-              </h2>
-              
-              {/* Legend map */}
-              <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-sm text-xs font-bold font-mono">
-                 <span className="text-gray-600 px-2 py-1 rounded">Correct</span>
-                 <span className="bg-red-100 text-red-700 border border-red-200 px-2 py-1 rounded line-through decoration-red-400">Incorrect</span>
-                 <span className="bg-amber-100 text-amber-800 border border-amber-200 px-2 py-1 rounded">Missing</span>
-                 <span className="bg-blue-50 text-[#1e3a8a] border border-blue-200 px-2 py-1 rounded">Capital/Format</span>
-                 <span className="bg-purple-100 text-purple-700 border border-purple-200 px-2 py-1 rounded">Extra Word</span>
-              </div>
-
               {data.original ? (
-                <HighlightedComparison
+                <DetailedAnalysisPanel
                   originalText={data.original}
+                  originalHtml={data.originalHtml}
                   attemptedText={data.typed}
+                  attemptedHtml={data.attemptedHtml}
+                  title="Side-by-Side Comparison"
                 />
               ) : (
                 <div className="text-center py-16 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
@@ -757,7 +805,7 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user }) => {
               ) : history.length > 0 ? (
                 <div className="space-y-3">
                   {history.map((h, idx) => {
-                    const isCurrent = h.id === attemptId;
+                    const isCurrent = h.id === currentAttemptId;
                     const accNum = parseFloat(h.accuracy) || 0;
                     const hColor = accNum >= 80 ? '#16a34a' : accNum >= 60 ? '#d97706' : '#dc2626';
                     return (

@@ -163,6 +163,7 @@ const DetailedAnalysisPanel = ({
   originalText  = DEMO_ORIGINAL,
   originalHtml  = null,
   attemptedText = DEMO_TYPED,
+  attemptedHtml = null,
   durationSec   = null,
   title         = 'Detailed Analysis',
 }) => {
@@ -199,7 +200,7 @@ const DetailedAnalysisPanel = ({
 
   // ── Inject Diff into HTML (for formatted Comparison View) ──
   const comparisonHtml = useMemo(() => {
-    if (!originalHtml) return null;
+    if (!originalHtml && !attemptedHtml) return null;
 
     // We implement a fast, client-safe HTML string renderer replacing react-dom/server
     // Which crashes standard Vite builds due to node environments missing.
@@ -236,8 +237,10 @@ const DetailedAnalysisPanel = ({
     };
 
     try {
+      const isAttempted = !!attemptedHtml;
+      const htmlToMap = isAttempted ? attemptedHtml : originalHtml;
       const parser = new DOMParser();
-      const doc = parser.parseFromString(originalHtml, 'text/html');
+      const doc = parser.parseFromString(htmlToMap, 'text/html');
       
       const walk = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, null, false);
       const textNodes = [];
@@ -258,14 +261,26 @@ const DetailedAnalysisPanel = ({
             span.appendChild(doc.createTextNode(p));
           } else {
             // It's a word
-            // First, dump any 'extra' tokens that occur before this word
-            while (tokenIdx < enrichedDiff.length && enrichedDiff[tokenIdx].type === 'extra') {
-              const extraWrapper = doc.createElement('span');
-              extraWrapper.innerHTML = renderTokenHtml(enrichedDiff[tokenIdx]);
-              span.appendChild(extraWrapper);
-              span.appendChild(doc.createTextNode(' '));
-              tokenIdx++;
+            if (isAttempted) {
+              // We are mapping on Student's HTML: inject 'missing' words
+              while (tokenIdx < enrichedDiff.length && enrichedDiff[tokenIdx].type === 'missing') {
+                const w = doc.createElement('span');
+                w.innerHTML = renderTokenHtml(enrichedDiff[tokenIdx]);
+                span.appendChild(w);
+                span.appendChild(doc.createTextNode(' '));
+                tokenIdx++;
+              }
+            } else {
+              // We are mapping on Admin HTML: inject 'extra' words
+              while (tokenIdx < enrichedDiff.length && enrichedDiff[tokenIdx].type === 'extra') {
+                const w = doc.createElement('span');
+                w.innerHTML = renderTokenHtml(enrichedDiff[tokenIdx]);
+                span.appendChild(w);
+                span.appendChild(doc.createTextNode(' '));
+                tokenIdx++;
+              }
             }
+
             // Now handle the actual word
             if (tokenIdx < enrichedDiff.length) {
               const wordWrapper = doc.createElement('span');
@@ -281,12 +296,21 @@ const DetailedAnalysisPanel = ({
         node.parentNode.removeChild(node);
       }
 
-      // Handle trailing 'extra' tokens
-      while (tokenIdx < enrichedDiff.length && enrichedDiff[tokenIdx].type === 'extra') {
-        const extraWrapper = doc.createElement('span');
-        extraWrapper.innerHTML = renderTokenHtml(enrichedDiff[tokenIdx]) + ' ';
-        doc.body.appendChild(extraWrapper);
-        tokenIdx++;
+      // Handle trailing tokens
+      if (isAttempted) {
+        while (tokenIdx < enrichedDiff.length && enrichedDiff[tokenIdx].type === 'missing') {
+          const w = doc.createElement('span');
+          w.innerHTML = renderTokenHtml(enrichedDiff[tokenIdx]) + ' ';
+          doc.body.appendChild(w);
+          tokenIdx++;
+        }
+      } else {
+        while (tokenIdx < enrichedDiff.length && enrichedDiff[tokenIdx].type === 'extra') {
+          const w = doc.createElement('span');
+          w.innerHTML = renderTokenHtml(enrichedDiff[tokenIdx]) + ' ';
+          doc.body.appendChild(w);
+          tokenIdx++;
+        }
       }
 
       return doc.body.innerHTML;
@@ -294,7 +318,7 @@ const DetailedAnalysisPanel = ({
       console.error("Error creating comparison HTML", e);
       return null;
     }
-  }, [originalHtml, enrichedDiff]);
+  }, [originalHtml, attemptedHtml, enrichedDiff]);
 
   // ── Sync scroll between panels ──────────────────────────────
   const origRef  = useRef(null);
