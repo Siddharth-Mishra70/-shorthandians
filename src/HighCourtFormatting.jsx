@@ -643,17 +643,41 @@ ORAL ORDER
                                         {selectedTest && docViewMode === 'pdf' && selectedTest.pdf ? (
                                             <iframe src={selectedTest.pdf} className="absolute inset-0 w-full h-full border-none" title="Reference PDF" />
                                         ) : (
-                                            /* WORD VIEW (Admin style full width) */
-                                            <div className="absolute inset-0 overflow-y-auto bg-white">
-                                                <div 
-                                                    className="min-h-full p-5 font-serif text-sm leading-relaxed text-black whitespace-pre-wrap outline-none"
-                                                    style={{ fontFamily: "'Courier New', Courier, monospace" }}
-                                                    dangerouslySetInnerHTML={{ __html: displayHtml }}
-                                                />
-                                                {!selectedTest && (
-                                                    <p className="mt-4 text-center text-xs text-gray-400 font-bold uppercase italic">Viewing default reference format</p>
-                                                )}
-                                            </div>
+                                            /* WORD VIEW — iframe srcdoc for pixel-perfect match with admin editor */
+                                            <iframe
+                                                className="absolute inset-0 w-full h-full border-none bg-white"
+                                                title="Reference Document"
+                                                sandbox="allow-same-origin"
+                                                srcDoc={`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%;
+    height: auto;
+    background: white;
+  }
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    line-height: 1.625;
+    color: black;
+    padding: 20px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  b, strong { font-weight: bold; }
+  i, em { font-style: italic; }
+  u { text-decoration: underline; }
+  center { display: block; text-align: center; }
+  div[style*="text-align"] { display: block; }
+</style>
+</head>
+<body>${displayHtml || ''}</body>
+</html>`}
+                                            />
                                         )}
                                     </div>
                             </div>
