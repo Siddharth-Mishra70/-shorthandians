@@ -105,7 +105,7 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
     setError('');
     const { name, phone, email, password } = regData;
 
-    if (!name.trim() || !phone.trim() || !password.trim()) {
+    if (!name.trim() || !phone.trim() || !email.trim() || !password.trim()) {
       setError('Please fill in all required fields.');
       return;
     }
@@ -113,15 +113,25 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
 
     try {
       // Check if phone or email already exists in Supabase
-      const { data: existing } = await supabase.from('users').select('id').eq('phone', phone).single();
-      if (existing) {
+      const trimmedPhone = phone.trim();
+      const trimmedEmail = email.toLowerCase().trim();
+
+      const { data: existingPhone } = await supabase.from('users').select('id').eq('phone', trimmedPhone).single();
+      if (existingPhone) {
         throw new Error('An account with this phone number already exists.');
+      }
+
+      if (trimmedEmail) {
+        const { data: existingEmail } = await supabase.from('users').select('id').eq('email', trimmedEmail).single();
+        if (existingEmail) {
+          throw new Error('An account with this email address already exists.');
+        }
       }
 
       const newUser = { 
         name: name.trim(), 
-        phone: phone.trim(), 
-        email: email?.toLowerCase().trim(), 
+        phone: trimmedPhone, 
+        email: trimmedEmail, 
         password: password.trim(),
         joinedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         created_at: new Date().toISOString()
@@ -136,7 +146,12 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
       setTimeout(() => onAuthSuccess(userData), 1000);
     } catch (err) {
       console.error('Registration error:', err);
-      setError(err.message || 'Registration failed.');
+      // Handle the specific unique constraint error from Supabase if it still slips through
+      if (err.message && err.message.includes('users_email_key')) {
+        setError('This email is already registered with another account.');
+      } else {
+        setError(err.message || 'Registration failed.');
+      }
     } finally {
       setLoading(false);
     }
@@ -413,7 +428,6 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
             </div>
           ) : (
             /* ── Register Form ── */
-            /* ... existing register form ... */
             <form onSubmit={handleRegister} className="space-y-5">
               <InputField
                 id="reg-name"
@@ -436,12 +450,13 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
               />
               <InputField
                 id="reg-email"
-                label="Email (optional)"
+                label="Email"
                 icon={Mail}
                 type="email"
                 placeholder="you@example.com"
                 value={regData.email}
                 onChange={(e) => setRegData({ ...regData, email: e.target.value })}
+                required
               />
               <InputField
                 id="reg-password"

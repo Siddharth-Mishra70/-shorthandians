@@ -36,12 +36,7 @@ const LiveDemoInteractive = ({ onRegister }) => {
 
   const textareaRef = useRef(null);
 
-  // Focus textarea on mount or when returning to typing mode
-  useEffect(() => {
-    if (isTyping && textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  }, [isTyping]);
+  // Focus removed to prevent auto-scrolling on load
 
   const handleStartTyping = (e) => {
     if (!startTime) {

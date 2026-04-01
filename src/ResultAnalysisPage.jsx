@@ -269,7 +269,7 @@ const HighlightedComparison = ({ originalText, attemptedText }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────────────────────────────────────
-const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user }) => {
+const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user, onNavigateToTest }) => {
   const reportRef = useRef(null);
   const [currentAttemptId, setCurrentAttemptId] = useState(attemptId);
   const [liveData, setLiveData] = useState(null);
@@ -317,7 +317,8 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user }) => {
         // If no original text in mistakes_data, try fetching from exercises table (UUID check)
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(row.exercise_id);
         
-        if (!originalText && isUUID) {
+        // If exercise_id is a UUID, always fetch the authoritative exercise details (specifically formatted_html)
+        if (isUUID) {
           try {
             const { data: ex, error: exErr } = await supabase
               .from('exercises')
@@ -457,7 +458,7 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user }) => {
           <p className="text-gray-500 text-sm mb-6">{loadError}</p>
           {onBack && (
             <button onClick={onBack} className="bg-[#1e3a8a] text-white font-bold px-6 py-2.5 rounded-xl hover:bg-blue-700 transition-colors">
-              Back to Dashboard
+              Go Back
             </button>
           )}
         </div>
@@ -508,14 +509,14 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user }) => {
 
       {/* ── Sticky Action Bar ─────────────────────────────────── */}
       <div className="print:hidden sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+        <div className="w-full px-4 md:px-6 py-3 flex items-center justify-between gap-3">
           {onBack && (
             <button
               onClick={onBack}
               className="flex items-center space-x-2 text-gray-500 hover:text-[#1e3a8a] font-semibold text-sm transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">Back to Dashboard</span>
+              <span className="hidden sm:inline">Back</span>
             </button>
           )}
 
@@ -568,7 +569,7 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user }) => {
       <div
         ref={reportRef}
         id="printable-report"
-        className="max-w-7xl mx-auto my-6 print:my-0 bg-white rounded-3xl shadow-xl print:shadow-none print:rounded-none overflow-hidden"
+        className="w-full my-6 print:my-0 bg-white rounded-3xl shadow-xl print:shadow-none print:rounded-none overflow-hidden"
       >
         {/* ── Gradient Header ────────────────────────────────── */}
         <div
@@ -811,7 +812,8 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user }) => {
                     return (
                       <div
                         key={h.id}
-                        className={`rounded-2xl border p-4 flex items-center justify-between group transition-all hover:shadow-md ${
+                        onClick={() => onNavigateToTest && onNavigateToTest(h.id)}
+                        className={`cursor-pointer rounded-2xl border p-4 flex items-center justify-between group transition-all hover:shadow-md ${
                           isCurrent
                             ? 'border-blue-200 bg-blue-50 shadow-sm'
                             : 'border-gray-100 bg-white hover:border-blue-100'

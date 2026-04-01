@@ -28,6 +28,7 @@ import LiveDemoInteractive from './LiveDemoInteractive';
 import ResultAnalysisPage from './ResultAnalysisPage';
 import AdminPanel from './AdminPanel';
 import StateExamModule from './StateExamModule';
+import StudentPerformanceDashboard from './StudentPerformanceDashboard';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Dashboard Sub-components
@@ -126,12 +127,12 @@ function App() {
   };
 
   const courses = [
-    { id: 'hc-formatting', title: 'Allahabad High Court', type: 'Formatting Test', isPremium: true, view: 'formatting' },
-    { id: 'pitman-ex', title: 'Pitman Shorthand', type: 'Exercise Practice', isPremium: false, view: 'pitman' },
-    { id: 'audio-dict', title: 'Audio Dictations', type: '80/100/120 WPM', isPremium: false, view: 'arena-audio' },
-    { id: 'kailash-chandra', title: 'Kailash Chandra', type: 'Standard Dictations', isPremium: false, view: 'arena-kc' },
-    { id: 'comprehension', title: 'Comprehension', type: 'Theory & Test', isPremium: false, view: 'arena-comp' },
-    { id: 'state-exam', title: 'State Exams', type: 'Selection Focused', isPremium: true, view: 'arena-state' },
+    { id: 'hc-formatting', title: 'Allahabad High Court', type: 'Formatting Test', isPremium: true, view: 'formatting', category: 'formatting' },
+    { id: 'pitman-ex', title: 'Pitman Shorthand', type: 'Exercise Practice', isPremium: false, view: 'pitman', category: 'pitman' },
+    { id: 'audio-dict', title: 'Audio Dictations', type: '80/100/120 WPM', isPremium: false, view: 'arena-audio', category: 'audio' },
+    { id: 'kailash-chandra', title: 'Kailash Chandra', type: 'Standard Dictations', isPremium: false, view: 'arena-kc', category: 'kailash' },
+    { id: 'comprehension', title: 'Comprehension', type: 'Theory & Test', isPremium: false, view: 'arena-comp', category: 'comprehension' },
+    { id: 'state-exam', title: 'State Exams', type: 'Selection Focused', isPremium: true, view: 'arena-state', category: 'state' },
   ];
 
   const currentViewData = courses.find((c) => c.view === currentView);
@@ -199,13 +200,17 @@ function App() {
     return (
         <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
             <div className="bg-white border-b shadow-sm sticky top-0 z-50">
-                <div className="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
+                <div className="w-full px-4 md:px-6 h-16 flex items-center justify-between">
                     <button onClick={() => setCurrentView('dashboard')} className="flex items-center space-x-2 text-[#1e3a8a] font-bold hover:text-blue-800 transition-colors">
                         <ArrowLeft className="w-4 h-4" /> <span className="hidden sm:inline">Back to Dashboard</span> <span className="sm:hidden text-xs">Back</span>
                     </button>
                 </div>
             </div>
-            <StateExamModule onBack={() => setCurrentView('dashboard')} onNavigateCourse={setCurrentView} />
+            <StateExamModule 
+              onBack={() => setCurrentView('dashboard')} 
+              onNavigateCourse={setCurrentView} 
+              category="state"
+            />
         </div>
     );
   }
@@ -215,7 +220,7 @@ function App() {
       <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
         {/* Arena Header with Tabs */}
         <div className="bg-white border-b shadow-sm sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
+          <div className="w-full px-4 md:px-6 h-16 flex items-center justify-between">
             <button
               onClick={() => {
                 setCurrentView('dashboard');
@@ -260,7 +265,7 @@ function App() {
           {arenaTab === 'transcribe' ? (
             <TypingArena
               initialCourse={currentViewData?.id || 'kc-1'}
-              courses={courses}
+              category={currentViewData?.category}
               onNavigateCourse={setCurrentView}
               onTestComplete={(id) => {
                 setLastAttemptId(id);
@@ -287,7 +292,7 @@ function App() {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
         <div className="bg-white border-b shadow-sm sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
+          <div className="w-full px-4 md:px-6 h-16 flex items-center justify-between">
             <button
               onClick={() => {
                 setCurrentView('dashboard');
@@ -330,6 +335,7 @@ function App() {
           {arenaTab === 'transcribe' ? (
             <PitmanAPSModule
               onBack={() => setCurrentView('dashboard')}
+              category="pitman"
               onTestComplete={(id) => {
                 setLastAttemptId(id);
                 setArenaTab('analysis');
@@ -351,12 +357,15 @@ function App() {
   // Supports both 'results' (demo) and 'results:UUID' (real data)
   // ── Result Analysis Page (Protected) ─────────────────────
   // Supports both 'results' (demo) and 'results:UUID' (real data)
-  if (currentView === 'results' || currentView.startsWith('results:')) {
-    const attemptId = currentView.includes(':') ? currentView.split(':')[1] : undefined;
+  // ── Result Analysis Page & Dashboard (Protected) ───────────
+  // ── Result Analysis Page Deep-Dive (Protected Overlay) ───
+  if (currentView.startsWith('results:')) {
+    const attemptId = currentView.split(':')[1];
     return (
       <ResultAnalysisPage
         attemptId={attemptId}
-        onBack={() => setCurrentView('dashboard')}
+        onBack={() => setCurrentView('results')}
+        onNavigateToTest={(id) => setCurrentView(`results:${id}`)}
         user={user}
       />
     );
@@ -369,7 +378,7 @@ function App() {
       <div className="min-h-screen bg-gray-50 flex flex-col">
         {/* Reuse Header */}
         <header className="bg-white shadow-sm border-b z-10">
-          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="w-full px-4 py-4 flex justify-between items-center">
              <button onClick={() => setCurrentView('dashboard')} className="flex items-center space-x-2 text-[#1e3a8a] font-bold hover:text-blue-800 transition-colors">
                  <ArrowLeft className="w-4 h-4" /> <span>Back to Dashboard</span>
              </button>
@@ -470,7 +479,7 @@ function App() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="bg-white shadow-sm border-b z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-[#1e3a8a] rounded-lg flex justify-center items-center">
               <span className="text-white font-bold text-xl">S</span>
@@ -516,7 +525,7 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 max-w-7xl w-full mx-auto flex flex-col md:flex-row overflow-hidden">
+      <div className="flex-1 w-full flex flex-col md:flex-row overflow-hidden">
         {/* Sidebar */}
         <aside className="w-full md:w-64 bg-white md:border-r border-b md:border-b-0 py-6 px-4 flex flex-col md:min-h-[calc(100vh-80px)]">
           <nav className="space-y-2 flex-1">
@@ -552,25 +561,40 @@ function App() {
         </aside>
 
         {/* Dashboard Content */}
-        <main className="flex-1 p-6 lg:p-10 bg-gray-50 overflow-y-auto">
-          <div className="mb-8">
-            <h2 className="text-3xl font-extrabold text-gray-900 mb-2">
-              Welcome back, {user?.name || 'Student'}! 👋
-            </h2>
-            <p className="text-gray-600">Explore our premium shorthand courses and dictations.</p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-12 justify-items-center">
-            {courses.map((course, idx) => (
-              <CircularCourseCard
-                key={idx}
-                title={course.title}
-                type={course.type}
-                isPremium={course.isPremium}
-                onTakeTest={() => setCurrentView(course.view)}
+        <main className={`flex-1 overflow-y-auto bg-gray-50 bg-dot-pattern ${currentView === 'dashboard' ? 'p-6 lg:p-10' : 'p-0'}`}>
+          {currentView === 'dashboard' ? (
+              <>
+                <div className="mb-8 p-6 lg:p-10 pb-0">
+                  <h2 className="text-3xl font-extrabold text-gray-900 mb-2">
+                    Welcome back, {user?.name || 'Student'}! 👋
+                  </h2>
+                  <p className="text-gray-600">Explore our premium shorthand courses and dictations.</p>
+                </div>
+      
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-12 justify-items-center p-6 lg:p-10">
+                  {courses.map((course, idx) => (
+                    <CircularCourseCard
+                      key={idx}
+                      title={course.title}
+                      type={course.type}
+                      isPremium={course.isPremium}
+                      onTakeTest={() => setCurrentView(course.view)}
+                    />
+                  ))}
+                </div>
+              </>
+          ) : currentView === 'results' ? (
+              <StudentPerformanceDashboard 
+                  user={user} 
+                  onBack={() => setCurrentView('dashboard')}
+                  onViewResult={(id) => setCurrentView(`results:${id}`)}
+                  onTakeTest={(view) => setCurrentView(view)}
               />
-            ))}
-          </div>
+          ) : (
+                <div className="p-6 lg:p-10">
+                    <p className="text-gray-500 italic">Select a module to proceed.</p>
+                </div>
+          )}
         </main>
       </div>
     </div>

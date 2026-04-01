@@ -292,27 +292,27 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
     React.useEffect(() => {
         const syncData = async () => {
             if (!supabase || supabase.supabaseUrl?.includes('placeholder')) return;
-            const { data: hc } = await supabase.from('exercises').select('*').eq('category', 'highcourt').order('created_at', { ascending: false });
+            const { data: hc } = await supabase.from('exercises').select('*').eq('category', 'highcourt').is('is_hidden', false).order('created_at', { ascending: false });
             if (hc) {
                 const seen = new Set();
                 setHcTests(hc.filter(i => { if (seen.has(i.id)) return false; seen.add(i.id); return true; }));
             }
-            const { data: pit } = await supabase.from('exercises').select('*').eq('category', 'pitman').order('created_at', { ascending: false });
+            const { data: pit } = await supabase.from('exercises').select('*').eq('category', 'pitman').is('is_hidden', false).order('created_at', { ascending: false });
             if (pit) {
                 const seen = new Set();
                 setPitmanTests(pit.filter(i => { if (seen.has(i.id)) return false; seen.add(i.id); return true; }));
             }
-            const { data: kc } = await supabase.from('exercises').select('*').eq('category', 'kailash').order('created_at', { ascending: false });
+            const { data: kc } = await supabase.from('exercises').select('*').eq('category', 'kailash').is('is_hidden', false).order('created_at', { ascending: false });
             if (kc) {
                 const seen = new Set();
                 setKailashTests(kc.filter(i => { if (seen.has(i.id)) return false; seen.add(i.id); return true; }));
             }
-            const { data: comp } = await supabase.from('exercises').select('*').eq('category', 'comprehension').order('created_at', { ascending: false });
+            const { data: comp } = await supabase.from('exercises').select('*').eq('category', 'comprehension').is('is_hidden', false).order('created_at', { ascending: false });
             if (comp) {
                 const seen = new Set();
                 setCompTests(comp.filter(i => { if (seen.has(i.id)) return false; seen.add(i.id); return true; }));
             }
-            const { data: aud } = await supabase.from('exercises').select('*').in('category', ['audio', 'Audio Dictation']).order('created_at', { ascending: false });
+            const { data: aud } = await supabase.from('exercises').select('*').in('category', ['audio', 'Audio Dictation']).is('is_hidden', false).order('created_at', { ascending: false });
             if (aud) {
                 // Deduplicate and map audio
                 const seenIds = new Set();
@@ -327,7 +327,7 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
                 const [{ data: resultsInDb }, { data: usersInDb }, { data: exRecords }] = await Promise.all([
                     supabase.from('test_results').select('*').order('created_at', { ascending: false }),
                     supabase.from('users').select('*'),
-                    supabase.from('exercises').select('id, title')
+                    supabase.from('exercises').select('id, title').is('is_hidden', false)
                 ]);
 
                 // Update Student Management list state independently
@@ -462,7 +462,6 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
                 const dbPayload = {
                     title: newItem.title,
                     original_text: isHc ? hcEncoded : quickText,
-                    formatted_html: isHc ? qHtml : undefined,  // ← full HTML for student display
                     category: quickModule === 'audio' ? 'Audio Dictation' : quickModule,
                     audio_url: quickModule === 'audio' ? newItem.audio : undefined,
                     image_url: quickModule === 'pitman' ? newItem.pdf : undefined
@@ -578,17 +577,64 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
         setIsAddingStateContent(true);
     };
 
-    const handleDeleteStateItem = (key, id) => {
+    const handleDeleteStateItem = async (key, id) => {
         if (!window.confirm('Delete this item?')) return;
-        const updated = { ...stateExams, [key]: (stateExams[key] || []).filter(i => i.id !== id) };
-        saveStateExams(updated);
+        try {
+            if (supabase && !supabase.supabaseUrl?.includes('placeholder')) {
+                const { error } = await supabase.from('exercises').update({ is_hidden: true }).eq('id', id);
+                if (error) {
+                    console.error('Supabase delete error:', error.message);
+                    alert('Failed to delete: ' + error.message);
+                    return;
+                }
+            }
+            
+            // Success: Update state
+            const updatedStateExams = { ...stateExams, [key]: (stateExams[key] || []).filter(i => i.id !== id) };
+            saveStateExams(updatedStateExams);
+            
+            // Also synchronize global module lists
+            const modKey = key.split('__')[1];
+            if (modKey === 'highcourt') {
+                const up = hcTests.filter(t => t.id !== id);
+                setHcTests(up); localStorage.setItem('admin_highcourt_data_list', JSON.stringify(up));
+            } else if (modKey === 'pitman') {
+                const up = pitmanTests.filter(t => t.id !== id);
+                setPitmanTests(up); localStorage.setItem('admin_pitman_data_list', JSON.stringify(up));
+            } else if (modKey === 'kailash') {
+                const up = kailashTests.filter(t => t.id !== id);
+                setKailashTests(up); localStorage.setItem('admin_kailash_data_list', JSON.stringify(up));
+            } else if (modKey === 'audio') {
+                const up = audioTests.filter(t => t.id !== id);
+                setAudioTests(up); localStorage.setItem('admin_published_audio_list', JSON.stringify(up));
+            } else if (modKey === 'comprehension') {
+                const up = compTests.filter(t => t.id !== id);
+                setCompTests(up); localStorage.setItem('admin_comprehension_data_list', JSON.stringify(up));
+            }
+        } catch (err) {
+            console.error('Delete operation failed:', err);
+            alert('Operation failed. Please check your connection.');
+        }
     };
 
-    const handleDeleteUser = (phone) => {
+    const handleDeleteUser = async (phone) => {
         if (window.confirm('Delete this student?')) {
-            const updated = users.filter(u => u.phone !== phone);
-            setUsers(updated);
-            localStorage.setItem('auth_users', JSON.stringify(updated));
+            try {
+                if (supabase && !supabase.supabaseUrl?.includes('placeholder')) {
+                    const { error } = await supabase.from('users').delete().eq('phone', phone);
+                    if (error) {
+                        console.error('Delete student failed:', error.message);
+                        alert('Failed to delete: ' + error.message);
+                        return;
+                    }
+                }
+                const updatedUsers = users.filter(u => u.phone !== phone);
+                setUsers(updatedUsers);
+                localStorage.setItem('auth_users', JSON.stringify(updatedUsers));
+            } catch (err) {
+                console.error('Delete student operation failed:', err);
+                alert('Operation failed. Please check your connection.');
+            }
         }
     };
 
@@ -699,17 +745,32 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
 
     const handleDeleteAudio = async (id) => {
         if (!window.confirm('Delete this Audio Dictation?')) return;
-        const updated = audioTests.filter(t => t.id !== id);
-        setAudioTests(updated); 
-        localStorage.setItem('admin_published_audio_list', JSON.stringify(updated));
-        const test = audioTests.find(t => t.id === id);
-        if (test && test.state) {
-            const key = `${test.state}__audio`;
-            if (stateExams[key]) {
-                 saveStateExams({ ...stateExams, [key]: stateExams[key].filter(e => e.id !== id) });
+        try {
+            if (supabase && !supabase.supabaseUrl?.includes('placeholder')) {
+                const { error } = await supabase.from('exercises').update({ is_hidden: true }).eq('id', id);
+                if (error) {
+                    console.error('Audio delete failed:', error.message);
+                    alert('Failed to delete: ' + error.message);
+                    return;
+                }
             }
+            
+            // Success: Update state
+            const updatedAudioTests = audioTests.filter(t => t.id !== id);
+            setAudioTests(updatedAudioTests); 
+            localStorage.setItem('admin_published_audio_list', JSON.stringify(updatedAudioTests));
+            
+            const test = audioTests.find(t => t.id === id);
+            if (test && test.state) {
+                const key = `${test.state}__audio`;
+                if (stateExams[key]) {
+                    saveStateExams({ ...stateExams, [key]: stateExams[key].filter(e => e.id !== id) });
+                }
+            }
+        } catch (err) {
+            console.error('Audio delete operation failed:', err);
+            alert('Operation failed. Please try again.');
         }
-        try { if (supabase && !supabase.supabaseUrl?.includes('placeholder')) await supabase.from('exercises').delete().eq('id', id); } catch { }
     };
 
     const handleSaveHcData = async () => {
@@ -748,7 +809,6 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
                 const dbPayload = {
                     title: hcTitle,
                     original_text: encodedContent,
-                    formatted_html: editorHtml,   // ← save full HTML as dedicated column
                     category: 'highcourt'
                 };
 
@@ -992,23 +1052,83 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
 
     const handleDeleteHc = async (id) => {
         if (!window.confirm('Delete this test?')) return;
-        const updated = hcTests.filter(t => t.id !== id);
-        setHcTests(updated); localStorage.setItem('admin_highcourt_data_list', JSON.stringify(updated));
-        try { if (supabase && !supabase.supabaseUrl?.includes('placeholder')) await supabase.from('exercises').delete().eq('id', id); } catch { }
+        try {
+            if (supabase && !supabase.supabaseUrl?.includes('placeholder')) {
+                const { error } = await supabase.from('exercises').update({ is_hidden: true }).eq('id', id);
+                if (error) {
+                    console.error('High Court delete failed:', error.message);
+                    alert('Failed to delete: ' + error.message);
+                    return;
+                }
+            }
+            
+            const test = hcTests.find(t => t.id === id);
+            const updatedHcTests = hcTests.filter(t => t.id !== id);
+            setHcTests(updatedHcTests); 
+            localStorage.setItem('admin_highcourt_data_list', JSON.stringify(updatedHcTests));
+            
+            if (test && test.state) {
+                const key = `${test.state}__highcourt`;
+                if (stateExams[key]) saveStateExams({ ...stateExams, [key]: stateExams[key].filter(e => e.id !== id) });
+            }
+        } catch (err) {
+            console.error('HC delete operation failed:', err);
+            alert('Operation failed. Please try again.');
+        }
     };
 
     const handleDeletePitman = async (id) => {
         if (!window.confirm('Delete this exercise?')) return;
-        const updated = pitmanTests.filter(t => t.id !== id);
-        setPitmanTests(updated); localStorage.setItem('admin_pitman_data_list', JSON.stringify(updated));
-        try { if (supabase && !supabase.supabaseUrl?.includes('placeholder')) await supabase.from('exercises').delete().eq('id', id); } catch { }
+        try {
+            if (supabase && !supabase.supabaseUrl?.includes('placeholder')) {
+                const { error } = await supabase.from('exercises').update({ is_hidden: true }).eq('id', id);
+                if (error) {
+                    console.error('Pitman delete failed:', error.message);
+                    alert('Failed to delete: ' + error.message);
+                    return;
+                }
+            }
+            
+            const test = pitmanTests.find(t => t.id === id);
+            const updatedPitmanTests = pitmanTests.filter(t => t.id !== id);
+            setPitmanTests(updatedPitmanTests); 
+            localStorage.setItem('admin_pitman_data_list', JSON.stringify(updatedPitmanTests));
+            
+            if (test && test.state) {
+                const key = `${test.state}__pitman`;
+                if (stateExams[key]) saveStateExams({ ...stateExams, [key]: stateExams[key].filter(e => e.id !== id) });
+            }
+        } catch (err) {
+            console.error('Pitman delete operation failed:', err);
+            alert('Operation failed. Please try again.');
+        }
     };
 
     const handleDeleteKc = async (id) => {
         if (!window.confirm('Delete this test?')) return;
-        const updated = kailashTests.filter(t => t.id !== id);
-        setKailashTests(updated); localStorage.setItem('admin_kailash_data_list', JSON.stringify(updated));
-        try { if (supabase && !supabase.supabaseUrl?.includes('placeholder')) await supabase.from('exercises').delete().eq('id', id); } catch { }
+        try {
+            if (supabase && !supabase.supabaseUrl?.includes('placeholder')) {
+                const { error } = await supabase.from('exercises').update({ is_hidden: true }).eq('id', id);
+                if (error) {
+                    console.error('Kailash delete failed:', error.message);
+                    alert('Failed to delete: ' + error.message);
+                    return;
+                }
+            }
+            
+            const test = kailashTests.find(t => t.id === id);
+            const updatedKcTests = kailashTests.filter(t => t.id !== id);
+            setKailashTests(updatedKcTests); 
+            localStorage.setItem('admin_kailash_data_list', JSON.stringify(updatedKcTests));
+            
+            if (test && test.state) {
+                const key = `${test.state}__kailash`;
+                if (stateExams[key]) saveStateExams({ ...stateExams, [key]: stateExams[key].filter(e => e.id !== id) });
+            }
+        } catch (err) {
+            console.error('KC delete operation failed:', err);
+            alert('Operation failed. Please try again.');
+        }
     };
 
     const handleSaveCompData = async () => {
@@ -1057,9 +1177,29 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
 
     const handleDeleteComp = async (id) => {
         if (!window.confirm('Delete this comprehension?')) return;
-        const updated = compTests.filter(t => t.id !== id);
-        setCompTests(updated); localStorage.setItem('admin_comprehension_data_list', JSON.stringify(updated));
-        try { if (supabase && !supabase.supabaseUrl?.includes('placeholder')) await supabase.from('exercises').delete().eq('id', id); } catch { }
+        try {
+            if (supabase && !supabase.supabaseUrl?.includes('placeholder')) {
+                const { error } = await supabase.from('exercises').update({ is_hidden: true }).eq('id', id);
+                if (error) {
+                    console.error('Comprehension delete failed:', error.message);
+                    alert('Failed to delete: ' + error.message);
+                    return;
+                }
+            }
+            
+            const test = compTests.find(t => t.id === id);
+            const updatedCompTests = compTests.filter(t => t.id !== id);
+            setCompTests(updatedCompTests); 
+            localStorage.setItem('admin_comprehension_data_list', JSON.stringify(updatedCompTests));
+            
+            if (test && test.state) {
+                const key = `${test.state}__comprehension`;
+                if (stateExams[key]) saveStateExams({ ...stateExams, [key]: stateExams[key].filter(e => e.id !== id) });
+            }
+        } catch (err) {
+            console.error('Comp delete operation failed:', err);
+            alert('Operation failed. Please try again.');
+        }
     };
 
     const handleClearStorage = () => {
@@ -1953,11 +2093,11 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
                                                 <Edit3 className="w-4 h-4" />
                                             </button>
                                             <button 
-                                                onClick={(e) => {
+                                                onClick={async (e) => {
                                                     e.stopPropagation();
                                                     if (!window.confirm('Delete this recent item?')) return;
                                                     if (supabase && !supabase.supabaseUrl?.includes('placeholder')) {
-                                                        supabase.from('exercises').delete().eq('id', item.id).then(()=>{});
+                                                        try { await supabase.from('exercises').delete().eq('id', item.id); } catch(err) { console.error('DB Delete failed:', err); }
                                                     }
                                                     if (item.mod === 'highcourt') {
                                                         const up = hcTests.filter(t => t.id !== item.id); setHcTests(up); localStorage.setItem('admin_highcourt_data_list', JSON.stringify(up));
@@ -1966,9 +2106,13 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
                                                     } else if (item.mod === 'kailash') {
                                                         const up = kailashTests.filter(t => t.id !== item.id); setKailashTests(up); localStorage.setItem('admin_kailash_data_list', JSON.stringify(up));
                                                     } else if (item.mod === 'audio') {
-                                                        const up = audioTests.filter(t => t.id !== item.id); setAudioTests(up); localStorage.setItem('admin_audio_data_list', JSON.stringify(up));
+                                                        const up = audioTests.filter(t => t.id !== item.id); setAudioTests(up); localStorage.setItem('admin_published_audio_list', JSON.stringify(up));
                                                     } else if (item.mod === 'comprehension') {
                                                         const up = compTests.filter(t => t.id !== item.id); setCompTests(up); localStorage.setItem('admin_comprehension_data_list', JSON.stringify(up));
+                                                    }
+                                                    if (item.state) {
+                                                        const key = `${item.state}__${item.mod}`;
+                                                        if (stateExams[key]) saveStateExams({ ...stateExams, [key]: stateExams[key].filter(e => e.id !== item.id) });
                                                     }
                                                 }}
                                                 className="p-1.5 text-gray-400 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all"

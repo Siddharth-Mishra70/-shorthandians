@@ -3,7 +3,35 @@ import {
   CheckCircle2, AlertCircle, Type, MinusCircle, PlusCircle,
   FileText, Eye,
 } from 'lucide-react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import { generateDetailedAnalysis } from './lib/generateDetailedAnalysis';
+
+// ─── Error Boundary for ReactQuill ──────────────────────────────
+class QuillErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false };
+    }
+    static getDerivedStateFromError(error) {
+        return { hasError: true };
+    }
+    componentDidCatch(error, errorInfo) {
+        console.error("ReactQuill Crash in Analysis:", error, errorInfo);
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div 
+                    className="p-10 font-mono text-sm text-gray-500 italic bg-white h-full"
+                    dangerouslySetInnerHTML={{ __html: this.props.fallbackValue }}
+                />
+            );
+        }
+        return this.props.children;
+    }
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Demo data (shown when no props supplied)
@@ -100,7 +128,7 @@ const WordToken = ({ token }) => {
       {/* Tooltip bubble */}
       <span
         className="
-          pointer-events-none absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2
+          pointer-events-none absolute z-50 left-full top-1/2 -translate-y-1/2 ml-2
           hidden group-hover:flex items-center gap-1.5
           whitespace-nowrap px-2.5 py-1.5 rounded-lg shadow-xl
           text-[11px] font-bold text-white
@@ -109,12 +137,12 @@ const WordToken = ({ token }) => {
       >
         {/* Arrow */}
         <span
-          className="absolute top-full left-1/2 -translate-x-1/2 -mt-px"
+          className="absolute right-full top-1/2 -translate-y-1/2 -mr-px"
           style={{
             width: 0, height: 0,
-            borderLeft: '5px solid transparent',
-            borderRight: '5px solid transparent',
-            borderTop: `5px solid ${cfg.color}`,
+            borderTop: '5px solid transparent',
+            borderBottom: '5px solid transparent',
+            borderRight: `5px solid ${cfg.color}`,
           }}
         />
         <Icon style={{ width: 11, height: 11 }} />
@@ -227,8 +255,8 @@ const DetailedAnalysisPanel = ({
             ${safeWord}
             ${iconHtml}
           </span>
-          <span class="pointer-events-none absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 rounded-lg shadow-xl text-[11px] font-bold text-white" style="background: ${cfg.color}; min-width: 80px">
-            <span class="absolute top-full left-1/2 -translate-x-1/2 -mt-px" style="width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 5px solid ${cfg.color}"></span>
+          <span class="pointer-events-none absolute z-50 left-full top-1/2 -translate-y-1/2 ml-2 hidden group-hover:flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 rounded-lg shadow-xl text-[11px] font-bold text-white" style="background: ${cfg.color}; min-width: 80px">
+            <span class="absolute right-full top-1/2 -translate-y-1/2 -mr-px" style="width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-right: 5px solid ${cfg.color}"></span>
             ${tipIconHtml}
             ${safeTip}
           </span>
@@ -412,23 +440,13 @@ const DetailedAnalysisPanel = ({
           <div
             ref={origRef}
             onScroll={syncScroll(origRef, compRef)}
-            className={`p-5 h-64 overflow-y-auto leading-8 ${originalHtml ? 'font-serif' : 'text-sm text-gray-700 font-mono'}`}
+            className="h-[500px] overflow-y-auto ql-snow bg-white"
           >
-            {originalHtml ? (
-              <div
-                dangerouslySetInnerHTML={{ __html: originalHtml }}
-                style={{ fontFamily: "'Courier New', Courier, monospace" }}
-              />
-            ) : (
-              originalText.trim().split(/\s+/).map((word, i) => (
-                <span key={i}>
-                  <span className="inline-block px-1 py-0.5 text-sm font-mono leading-loose text-gray-700">
-                    {word}
-                  </span>
-                  {' '}
-                </span>
-              ))
-            )}
+            <div 
+                className="ql-editor font-mono text-[14px] md:text-[16px] leading-loose text-black whitespace-pre-wrap not-italic" 
+                style={{ minHeight: '100%', padding: '30px', fontFamily: "'Courier New', Courier, monospace" }}
+                dangerouslySetInnerHTML={{ __html: originalHtml || originalText }} 
+            />
           </div>
         </div>
 
@@ -453,21 +471,13 @@ const DetailedAnalysisPanel = ({
           <div
             ref={compRef}
             onScroll={syncScroll(compRef, origRef)}
-            className={`p-5 h-64 overflow-y-auto leading-8 ${comparisonHtml ? 'font-serif' : 'text-sm text-gray-700 font-mono'}`}
+            className="h-[500px] overflow-y-auto ql-snow bg-white"
           >
-            {comparisonHtml ? (
-              <div
-                dangerouslySetInnerHTML={{ __html: comparisonHtml }}
-                style={{ fontFamily: "'Courier New', Courier, monospace" }}
-              />
-            ) : (
-              enrichedDiff.map((token, i) => (
-                <span key={i}>
-                  <WordToken token={token} />
-                  {' '}
-                </span>
-              ))
-            )}
+            <div 
+              className="ql-editor font-mono text-[16px] leading-loose text-black whitespace-pre-wrap break-words not-italic" 
+              style={{ padding: '30px', fontFamily: "'Courier New', Courier, monospace", minHeight: '100%' }}
+              dangerouslySetInnerHTML={{ __html: comparisonHtml || attemptedHtml || attemptedText }} 
+            />
           </div>
         </div>
       </div>

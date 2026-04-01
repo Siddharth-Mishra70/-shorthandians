@@ -36,10 +36,7 @@ const StateExamModule = ({ onBack, onSelectTest, onNavigateCourse }) => {
     if (!selectedState) {
         return (
             <div className="flex-1 overflow-y-auto p-6 md:p-10 bg-gray-50 h-full">
-                <div className="max-w-7xl mx-auto flex flex-col">
-                    <button onClick={onBack} className="self-start flex items-center mb-6 text-gray-500 hover:text-[#1e3a8a] transition-colors font-bold">
-                        <ArrowLeft className="w-5 h-5 mr-2" /> Back to Dashboard
-                    </button>
+                <div className="w-full mx-auto flex flex-col">
                     <h2 className="text-3xl font-extrabold text-gray-900 mb-2">State Exams</h2>
                     <p className="text-gray-600 mb-8">Select a state to practice its native mock tests and formatting exercises.</p>
                     

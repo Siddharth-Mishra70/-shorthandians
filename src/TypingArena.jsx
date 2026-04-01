@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, Volume2, FastForward, Clock, Activity, CheckCircle2, Share2, X, FileCheck, TrendingUp, Headphones, ArrowLeft, Maximize, Minimize } from 'lucide-react';
+import { Play, Pause, RotateCcw, Volume2, FastForward, Clock, Activity, CheckCircle2, Share2, X, FileCheck, TrendingUp, Headphones, ArrowLeft, Maximize, Minimize, Sparkles, Upload, Music, FileText } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { saveTestResult } from './lib/saveTestResult';
 
@@ -30,7 +30,7 @@ const mockExercises = [
     }
 ];
 
-const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNavigateCourse }) => {
+const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNavigateCourse, category }) => {
     const [availableExercises, setAvailableExercises] = useState(mockExercises);
     const [selectedExercise, setSelectedExercise] = useState(mockExercises[0]);
     const [isLoadingExercises, setIsLoadingExercises] = useState(true);
@@ -69,6 +69,13 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
     const [attemptId, setAttemptId] = useState(null);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
+    
+    // Custom Content Upload States
+    const [isCustomMode, setIsCustomMode] = useState(false);
+    const [customAudioFile, setCustomAudioFile] = useState(null);
+    const [customAudioUrl, setCustomAudioUrl] = useState(null);
+    const [customText, setCustomText] = useState('');
+    const [isUploadingCustom, setIsUploadingCustom] = useState(false);
 
     const toggleFullscreen = () => {
         if (!document.fullscreenElement) {
@@ -440,6 +447,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                 userId: resolvedUserId,
                 studentName: resolvedUserName,
                 exerciseId: resolvedExerciseId,
+                exerciseCategory: category,
                 wpm: stats.wpm,
                 accuracy: stats.accuracy,
                 attemptedText: inputText,
@@ -606,6 +614,108 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
         );
     }
 
+    // ── Custom Upload UI ───────────────────────────────────────
+    if (viewMode === 'custom-upload') {
+        return (
+            <div className="h-full flex-1 bg-[#f8fafc] flex flex-col p-4 md:p-8 overflow-y-auto no-scrollbar">
+                <div className="max-w-3xl mx-auto w-full space-y-8">
+                    <button 
+                        onClick={() => {
+                             setIsCustomMode(false);
+                             setViewMode('selection');
+                        }}
+                        className="flex items-center text-gray-500 hover:text-[#1e3a8a] font-bold transition-colors"
+                    >
+                        <ArrowLeft className="w-5 h-5 mr-2" /> Back to Library
+                    </button>
+
+                    <div className="bg-white rounded-[3rem] p-10 shadow-2xl border border-gray-100 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-bl-[10rem] -z-0 opacity-50" />
+                        
+                        <div className="relative z-10">
+                            <h2 className="text-3xl font-black text-gray-900 mb-2">Practice with Your Own Audio</h2>
+                            <p className="text-gray-500 font-bold mb-10">Upload your own dictate and transcription logic for customized training.</p>
+
+                            <div className="space-y-8">
+                                <div className="space-y-4">
+                                    <label className="flex items-center text-sm font-black text-gray-700 uppercase tracking-widest">
+                                        <Music className="w-4 h-4 mr-2 text-indigo-500" /> 1. Upload Audio File
+                                    </label>
+                                    <div className="relative">
+                                        <input 
+                                            type="file" 
+                                            accept="audio/*" 
+                                            onChange={(e) => {
+                                                const file = e.target.files[0];
+                                                if (file) {
+                                                    setCustomAudioFile(file);
+                                                    setCustomAudioUrl(URL.createObjectURL(file));
+                                                }
+                                            }}
+                                            className="hidden" 
+                                            id="custom-audio-upload"
+                                        />
+                                        <label 
+                                            htmlFor="custom-audio-upload"
+                                            className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-[2rem] cursor-pointer transition-all ${customAudioFile ? 'bg-indigo-50 border-indigo-300' : 'bg-gray-50 border-gray-200 hover:bg-white hover:border-indigo-400'}`}
+                                        >
+                                            <Upload className={`w-8 h-8 mb-2 ${customAudioFile ? 'text-indigo-600' : 'text-gray-400'}`} />
+                                            <span className={`text-sm font-bold ${customAudioFile ? 'text-indigo-700' : 'text-gray-500'}`}>
+                                                {customAudioFile ? customAudioFile.name : 'Click to select audio (MP3, WAV, etc.)'}
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <label className="flex items-center text-sm font-black text-gray-700 uppercase tracking-widest">
+                                        <FileText className="w-4 h-4 mr-2 text-indigo-500" /> 2. Paste Transcription Text
+                                    </label>
+                                    <textarea 
+                                        value={customText}
+                                        onChange={(e) => setCustomText(e.target.value)}
+                                        placeholder="Paste the correct text here. This will be used to calculate your accuracy..."
+                                        className="w-full h-48 p-6 bg-gray-50 border border-gray-100 rounded-[2rem] outline-none focus:ring-4 focus:ring-indigo-100 focus:bg-white transition-all font-mono text-sm leading-relaxed"
+                                    />
+                                </div>
+
+                                <button 
+                                    onClick={() => {
+                                        if (!customAudioUrl || !customText.trim()) {
+                                            alert("Please upload an audio file and provide the transcription text.");
+                                            return;
+                                        }
+                                        
+                                        const customEx = {
+                                            id: `custom-${Date.now()}`,
+                                            title: `Custom Practice: ${customAudioFile?.name || 'Untitled'}`,
+                                            category: 'audio',
+                                            isAudioCourse: true,
+                                            audio: customAudioUrl,
+                                            lines: customText.split('\n').filter(l => l.trim() !== ''),
+                                            isCustom: true
+                                        };
+                                        
+                                        setSelectedExercise(customEx);
+                                        setDbExerciseId(null);
+                                        setViewMode('practice');
+                                        if (audioRef.current) {
+                                            audioRef.current.src = customAudioUrl;
+                                        }
+                                    }}
+                                    className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-base font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-indigo-200 active:scale-95 flex items-center justify-center space-x-3"
+                                >
+                                    <Play className="w-5 h-5 fill-current" />
+                                    <span>Start Custom Practice</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     // ── Main Selection UI ───────────────────────────────────────
     if (viewMode === 'selection') {
         const activeList = groupedTests[activeDateTab] || [];
@@ -613,7 +723,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
         
         return (
             <div className="h-full flex-1 bg-[#f8fafc] flex flex-col p-4 md:p-8 overflow-y-auto no-scrollbar">
-                <div className="max-w-7xl mx-auto w-full space-y-8">
+                <div className="w-full px-4 md:px-6 mx-auto space-y-8">
                     {/* Module Header */}
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
@@ -644,6 +754,31 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                            {/* CUSTOM PRACTICE CARD */}
+                            <div 
+                                onClick={() => {
+                                    setIsCustomMode(true);
+                                    setViewMode('custom-upload');
+                                }}
+                                className="group bg-gradient-to-br from-indigo-50 to-white rounded-[2rem] p-6 shadow-xl shadow-indigo-100/50 border-2 border-dashed border-indigo-200 hover:border-indigo-600 hover:translate-y-[-8px] transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between"
+                            >
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-bl-[4rem] group-hover:bg-indigo-500/10 transition-colors" />
+                                <div>
+                                    <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center mb-6 shadow-sm border border-indigo-200">
+                                        <Sparkles className="w-7 h-7 text-indigo-600" />
+                                    </div>
+                                    <h3 className="text-xl font-black text-gray-900 mb-2 leading-tight group-hover:text-indigo-600">
+                                        Practice with Own Content
+                                    </h3>
+                                    <p className="text-xs font-bold text-gray-400 mb-6 uppercase tracking-wider leading-relaxed">
+                                        Upload your own audio and transcription text for personalized training.
+                                    </p>
+                                </div>
+                                <button className="w-full py-3 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-200">
+                                    Get Started
+                                </button>
+                            </div>
+
                             {activeList.map((test, idx) => (
                                 <div 
                                     key={test.id}
@@ -707,15 +842,8 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
     }
 
     return (
-        <div className="h-full flex-1 bg-gray-50 flex flex-col p-2 md:p-4 font-sans text-lg min-h-0 overflow-hidden relative">
-
-            <button 
-                onClick={() => setViewMode('selection')}
-                className="absolute top-4 left-4 z-[100] bg-white border border-gray-200 px-4 py-2 rounded-xl text-xs font-black text-[#1e3a8a] shadow-sm hover:bg-blue-50 transition-all flex items-center gap-2"
-            >
-                <ArrowLeft className="w-3 h-3" /> Change Exercise
-            </button>
-            <div className="w-full h-full max-w-[1440px] mx-auto bg-white md:rounded-2xl shadow-xl overflow-hidden border border-gray-100 flex flex-col relative transition-all duration-300">
+        <div className="h-full flex-1 bg-gray-50 flex flex-col font-sans text-lg min-h-0 overflow-hidden relative">
+            <div className="w-full h-full bg-white shadow-xl overflow-hidden border border-gray-100 flex flex-col relative transition-all duration-300">
 
                 {/* Top Bar */}
                 <div className="bg-[#1e3a8a] text-white px-6 py-4 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0 shadow-md shrink-0">
@@ -730,7 +858,8 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                                 } else {
                                     const ex = availableExercises.find(x => x.id === e.target.value);
                                     if (ex) {
-                                        setSelectedExercise(ex);
+                                        const finalEx = { ...ex, isAudioCourse: ex.category === 'audio' };
+                                        setSelectedExercise(finalEx);
                                         handleReset();
                                     }
                                 }
@@ -844,45 +973,10 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
 
                 {/* Content Layout */}
                 <div className="flex flex-1 overflow-hidden min-h-0">
-                    {/* Left Sidebar for tests */}
-                    {(selectedExercise?.id?.startsWith('kc-') || selectedExercise?.category === 'kailash' || selectedExercise?.category === 'audio') && 
-                     availableExercises.filter(e => e.category === selectedExercise?.category || 
-                        (selectedExercise?.category === 'kailash' && e?.id?.startsWith('kc-'))).length > 1 && (
-                        <div className="w-72 border-r border-gray-200 bg-white flex flex-col overflow-y-auto shrink-0 z-10 custom-scrollbar">
-                            <div className="p-4 bg-gray-50 font-bold text-gray-700 border-b sticky top-0 uppercase tracking-wider text-xs">
-                                Uploaded {selectedExercise?.category === 'audio' ? 'Audio Dictations' : 'Tests'}
-                            </div>
-                            <div className="flex flex-col">
-                                {availableExercises.filter(e => e.category === selectedExercise?.category || 
-                                    (selectedExercise?.category === 'kailash' && e?.id?.startsWith('kc-'))).map((test, index) => (
-                                    <button
-                                        key={test.id}
-                                        onClick={() => { 
-                                            const t = {...test};
-                                            if (t.category === 'audio') {
-                                                t.isAudioCourse = true;
-                                            }
-                                            setSelectedExercise(t); 
-                                            handleReset(); 
-                                        }}
-                                        className={`text-left p-4 border-b text-sm font-bold transition-colors flex flex-col ${selectedExercise?.id === test.id ? 'bg-[#1e3a8a] text-white' : 'hover:bg-blue-50 text-gray-700 bg-white'}`}
-                                    >
-                                        <div className="flex justify-between items-center w-full mb-1">
-                                            <span className="truncate pr-2 w-48" title={test.title}>{test.title.replace('Kailash Chandra Vol ', '')}</span>
-                                            {index === 0 && (
-                                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${selectedExercise?.id === test.id ? 'bg-white text-[#1e3a8a]' : 'bg-green-100 text-green-700'}`}>NEW</span>
-                                            )}
-                                        </div>
-                                        <span className={`text-xs ${selectedExercise?.id === test.id ? 'text-blue-200' : 'text-gray-400'}`}>Click to start</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
+                    
                     {/* Main Arena Content */}
                     <div className="flex-1 flex flex-col w-full relative min-h-0">
-                        <div className="flex-1 flex flex-col overflow-y-auto w-full relative min-h-0 custom-scrollbar">
+                        <div className="flex-1 flex flex-col overflow-hidden w-full relative min-h-0 custom-scrollbar">
                         {/* Action / Dictation Area (Hide in Audio Mode as it's now integrated) */}
                         {!selectedExercise?.isAudioCourse && (
                             <div className="p-6 bg-blue-50/30 border-b border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
@@ -1093,7 +1187,6 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                                             autoCorrect="off"
                                             autoCapitalize="off"
                                             spellCheck="false"
-                                            autoFocus
                                         />
                                     </div>
                                 </>

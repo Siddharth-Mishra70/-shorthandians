@@ -52,7 +52,7 @@ const pitmanExercises = [
     }
 ];
 
-const PitmanAPSModule = ({ onBack, onTestComplete }) => {
+const PitmanAPSModule = ({ onBack, onTestComplete, category }) => {
     const [exercises, setExercises] = useState(pitmanExercises);
     const [selectedExercise, setSelectedExercise] = useState(pitmanExercises[0]);
     const [viewMode, setViewMode] = useState('selection'); // 'selection' | 'practice'
@@ -340,6 +340,7 @@ const PitmanAPSModule = ({ onBack, onTestComplete }) => {
                 userId: resolvedUserId,
                 studentName: resolvedUserName,
                 exerciseId: `${selectedExercise.title} (Pitman_APS)`,
+                exerciseCategory: category,
                 wpm: stats.wpm,
                 accuracy: stats.accuracy,
                 attemptedText: inputText,
@@ -393,7 +394,7 @@ const PitmanAPSModule = ({ onBack, onTestComplete }) => {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 md:p-10">
-                    <div className="max-w-7xl mx-auto w-full space-y-8">
+                    <div className="w-full mx-auto space-y-8">
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <div>
                                 <h3 className="text-3xl font-black text-[#1e3a8a] tracking-tight">Pitman Dashboard</h3>
@@ -457,18 +458,10 @@ const PitmanAPSModule = ({ onBack, onTestComplete }) => {
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col font-sans relative">
-            {/* Floating Back Button */}
-            <button 
-                onClick={() => setViewMode('selection')}
-                className="fixed top-[4.5rem] left-6 z-[90] bg-white border border-gray-200 px-4 py-2 rounded-xl text-xs font-black text-[#1e3a8a] shadow-sm hover:bg-blue-50 transition-all flex items-center gap-2"
-            >
-                <ArrowLeft className="w-3 h-3" /> Back to Dashboard
-            </button>
-
             {/* Top Bar */}
             <div className="bg-[#1e3a8a] text-white px-6 py-4 flex flex-col md:flex-row justify-between items-center shadow-md z-10">
                 <div className="flex items-center space-x-4 mb-4 md:mb-0">
-                    <button onClick={() => setViewMode('selection')} className="hover:bg-blue-800 p-2 rounded-full transition-colors" title="Back to Dashboard">
+                    <button onClick={() => setViewMode('selection')} className="hover:bg-blue-800 p-2 rounded-full transition-colors" title="Back to Selection">
                         <ArrowLeft className="w-5 h-5" />
                     </button>
                     <div>
@@ -515,7 +508,7 @@ const PitmanAPSModule = ({ onBack, onTestComplete }) => {
             </div>
 
 
-            <div className="flex-1 max-w-[1600px] w-full mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
+            <div className="flex-1 w-full mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
 
                 {/* Left Side: Shorthand Strokes Image */}
                 <div className="bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col overflow-hidden h-full">

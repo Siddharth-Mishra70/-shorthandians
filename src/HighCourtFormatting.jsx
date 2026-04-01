@@ -22,10 +22,12 @@ import {
     Maximize,
     Minimize
 } from 'lucide-react';
+import 'react-quill/dist/quill.snow.css';
 import DetailedAnalysisPanel from './DetailedAnalysisPanel';
 import { saveTestResult } from './lib/saveTestResult';
 import { generateDetailedAnalysis } from './lib/generateDetailedAnalysis';
 
+// ─── Content Formatting Utility ──────────────────────────────
 /**
  * Data Parser Function: Parses rawContent as JSON if possible,
  * extracts html/plain property, and replaces newlines with <br/> tags.
@@ -382,6 +384,7 @@ ORAL ORDER
                 attemptedText: resultText,
                 originalText: originalBase,
                 exerciseId: selectedTestId,
+                exerciseCategory: 'formatting',
                 userId: user?.id,
                 studentName: user?.name,
                 // Attach HTML for the admin to check formatting specifically
@@ -455,7 +458,7 @@ ORAL ORDER
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 md:p-10 no-scrollbar">
-                    <div className="max-w-7xl mx-auto w-full space-y-8">
+                    <div className="w-full mx-auto space-y-8">
                         {/* Tab Switcher */}
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <div>
@@ -521,17 +524,9 @@ ORAL ORDER
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col font-sans relative">
-            {/* Context Back Button */}
-            <button 
-                onClick={() => setViewMode('selection')}
-                className="fixed top-[4.5rem] left-6 z-[90] bg-white border border-gray-200 px-4 py-2 rounded-xl text-xs font-black text-[#1e3a8a] shadow-sm hover:bg-blue-50 transition-all flex items-center gap-2"
-            >
-                <ArrowLeft className="w-3 h-3" /> Back to Dashboard
-            </button>
-
+        <div className="h-screen overflow-hidden bg-gray-50 flex flex-col font-sans relative">
             {/* Top Header */}
-            <div className="bg-[#1e3a8a] text-white px-6 py-4 flex justify-between items-center shadow-md z-10">
+            <div className="sticky top-0 bg-[#1e3a8a] text-white px-6 py-4 flex justify-between items-center shadow-lg z-[100]">
                 <div className="flex items-center space-x-4">
                     <button
                         onClick={() => setViewMode('selection')}
@@ -647,28 +642,13 @@ ORAL ORDER
                                     {selectedTest && docViewMode === 'pdf' && selectedTest.pdf ? (
                                         <iframe src={selectedTest.pdf} className="absolute inset-0 w-full h-full border-none" title="Reference PDF" />
                                     ) : (
-                                        <div className="h-full overflow-auto">
-                                            <style>{`
-                                                .hc-ref-doc { all: initial; display: block; }
-                                                .hc-ref-doc * { all: revert; }
-                                                .hc-ref-doc {
-                                                    font-family: 'Courier New', Courier, monospace !important;
-                                                    font-size: 14px !important;
-                                                    line-height: 1.625 !important;
-                                                    color: black !important;
-                                                    padding: 20px !important;
-                                                    white-space: pre-wrap !important;
-                                                    word-wrap: break-word !important;
-                                                    background: white !important;
-                                                    min-height: 100% !important;
-                                                    display: block !important;
-                                                }
-                                            `}</style>
-                                            <div
-                                                className="hc-ref-doc"
-                                                dangerouslySetInnerHTML={{ __html: displayHtml || '<p style="color:#9ca3af;font-style:italic">Select a test to view the reference document.</p>' }}
-                                            />
-                                        </div>
+                                             <div className="ql-snow bg-white border border-gray-200 shadow-sm overflow-y-auto w-full h-full no-scrollbar">
+                                                <div 
+                                                    className="ql-editor font-mono text-[16px] md:text-[18px] leading-loose text-black whitespace-pre-wrap not-italic" 
+                                                    style={{ padding: '40px', fontFamily: "'Courier New', Courier, monospace", minHeight: '100%' }}
+                                                    dangerouslySetInnerHTML={{ __html: displayHtml || '<p style="color:#9ca3af;font-style:italic">Select a test to view the reference document.</p>' }} 
+                                                />
+                                            </div>
                                     )}
                                 </div>
                             </div>
