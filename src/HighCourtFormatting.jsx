@@ -437,10 +437,10 @@ ORAL ORDER
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => execCmd(command)}
-            className="p-2 text-gray-600 hover:text-[#1e3a8a] hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-200 focus:outline-none"
+            className="p-2 text-gray-800 hover:text-blue-700 hover:bg-blue-50/50 rounded-lg transition-all duration-200 border border-transparent hover:border-blue-100 flex items-center justify-center active:scale-90"
             title={title}
         >
-            <Icon className="w-4 h-4" />
+            <Icon className="w-4.5 h-4.5" />
         </button>
     );
 
@@ -665,20 +665,35 @@ ORAL ORDER
                             <div className="flex-1 flex flex-col min-h-0">
                                 <div className="bg-white h-full overflow-hidden flex flex-col">
                                     {/* Custom Toolbar */}
-                                    <div className="flex items-center gap-1 p-1.5 border-b bg-gray-50 overflow-x-auto shrink-0">
-                                        <div className="flex space-x-0.5 border-r pr-1.5 mr-1.5">
-                                            <ToolbarButton icon={Bold} command="bold" title="Bold (Ctrl+B)" />
-                                            <ToolbarButton icon={Italic} command="italic" title="Italic (Ctrl+I)" />
-                                            <ToolbarButton icon={Underline} command="underline" title="Underline (Ctrl+U)" />
+                                    <div className="flex items-center justify-center gap-4 p-2.5 border-b bg-gray-50 shadow-inner shrink-0">
+                                        <div className="flex bg-white items-center p-1 rounded-xl shadow-sm border border-gray-200">
+                                            <div className="flex space-x-1 px-2 border-r border-gray-100">
+                                                <ToolbarButton icon={Bold} command="bold" title="Bold (Ctrl+B)" />
+                                                <ToolbarButton icon={Italic} command="italic" title="Italic (Ctrl+I)" />
+                                                <ToolbarButton icon={Underline} command="underline" title="Underline (Ctrl+U)" />
+                                            </div>
+                                            <div className="flex space-x-1 px-2">
+                                                <ToolbarButton icon={AlignLeft} command="justifyLeft" title="Align Left" />
+                                                <ToolbarButton icon={AlignCenter} command="justifyCenter" title="Align Center" />
+                                                <ToolbarButton icon={AlignRight} command="justifyRight" title="Align Right" />
+                                                <ToolbarButton icon={AlignJustify} command="justifyFull" title="Justify" />
+                                            </div>
                                         </div>
-                                        <div className="flex space-x-0.5 border-r pr-1.5 mr-1.5">
-                                            <ToolbarButton icon={AlignLeft} command="justifyLeft" title="Align Left" />
-                                            <ToolbarButton icon={AlignCenter} command="justifyCenter" title="Align Center" />
-                                            <ToolbarButton icon={AlignRight} command="justifyRight" title="Align Right" />
-                                            <ToolbarButton icon={AlignJustify} command="justifyFull" title="Justify" />
-                                        </div>
-                                        <div className="text-[10px] text-gray-400 font-bold uppercase hidden md:block">
-                                            Font: Courier New
+
+                                        <div className="flex items-center bg-white px-3 py-1.5 rounded-xl shadow-sm border border-gray-200">
+                                            <span className="text-[10px] font-black text-blue-800 uppercase tracking-tighter mr-2">Font</span>
+                                            <select 
+                                                className="bg-transparent text-xs font-bold text-gray-700 outline-none cursor-pointer hover:text-blue-700 transition-colors"
+                                                onChange={(e) => execCmd('fontName', e.target.value)}
+                                                defaultValue="Courier New"
+                                            >
+                                                <option value="Courier New">Courier New</option>
+                                                <option value="Arial">Arial</option>
+                                                <option value="Times New Roman">Times New Roman</option>
+                                                <option value="Calibri">Calibri</option>
+                                                <option value="Georgia">Georgia</option>
+                                                <option value="Verdana">Verdana</option>
+                                            </select>
                                         </div>
                                     </div>
                                     

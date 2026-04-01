@@ -59,37 +59,37 @@ const DEMO_TYPED =
 // ─────────────────────────────────────────────────────────────────────────────
 const TOKEN_CONFIG = {
   correct: {
-    base:  'bg-green-100 text-green-800 rounded',
+    base:  'text-green-700',
     icon:  CheckCircle2,
-    color: '#16a34a',
+    color: '#15803d',
     tip:   'Correct',
     label: 'Correct',
   },
   wrong: {
-    base:  'bg-red-100 text-red-700 rounded line-through decoration-red-500',
+    base:  'text-red-700 line-through decoration-red-500 font-bold bg-red-50/50',
     icon:  AlertCircle,
-    color: '#dc2626',
+    color: '#b91c1c',
     tip:   (orig) => `Spelling — correct: "${orig}"`,
     label: 'Spelling Error',
   },
   capital: {
-    base:  'text-blue-700 underline decoration-blue-500 decoration-2 underline-offset-2 rounded',
+    base:  'text-blue-700 underline decoration-blue-500 decoration-2 underline-offset-2 bg-blue-50/20',
     icon:  Type,
-    color: '#2563eb',
+    color: '#1d4ed8',
     tip:   (orig) => `Capitalisation — should be: "${orig}"`,
     label: 'Capitalisation',
   },
   missing: {
-    base:  'bg-red-100 text-red-500 rounded italic',
+    base:  'text-red-600 bg-red-100/50 px-0.5 rounded italic border border-red-100',
     icon:  MinusCircle,
-    color: '#dc2626',
+    color: '#be123c',
     tip:   (orig) => `Missing word: "${orig}"`,
     label: 'Missing',
   },
   extra: {
-    base:  'bg-amber-100 text-amber-700 rounded',
+    base:  'text-amber-700 bg-amber-50/50 px-0.5 rounded border border-amber-100',
     icon:  PlusCircle,
-    color: '#d97706',
+    color: '#b45309',
     tip:   'Extra word (not in original)',
     label: 'Extra Word',
   },
@@ -242,31 +242,21 @@ const DetailedAnalysisPanel = ({
 
     const renderTokenHtml = (token) => {
       const cfg = TOKEN_CONFIG[token.type];
-      if (!cfg) return `<span>${token.word} </span>`;
+      if (!cfg) return `<span>${token.word}</span>`;
       const tipText = typeof cfg.tip === 'function' ? cfg.tip(token.orig || token.word) : cfg.tip;
       const safeWord = token.word.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const safeTip = tipText.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-      const iconHtml = (token.type !== 'correct') ? `<span class="inline-block flex-shrink-0 ml-0.5" style="width:10px; height:10px; color:${cfg.color}">${ICONS_SVG[token.type]}</span>` : '';
-      const tipIconHtml = `<span style="display:inline-block; vertical-align:middle; width:11px; height:11px">${ICONS_SVG[token.type].replace('width="10" height="10"', 'width="11" height="11"')}</span>`;
-
-      return `
-        <span class="relative inline-block group">
-          <span class="inline-flex items-center gap-0.5 px-1 py-0.5 text-sm font-mono leading-relaxed cursor-help transition-all duration-150 group-hover:shadow-md ${cfg.base}">
-            ${safeWord}
-            ${iconHtml}
-          </span>
-          <span class="pointer-events-none absolute z-50 left-full top-1/2 -translate-y-1/2 ml-2 hidden group-hover:flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 rounded-lg shadow-xl text-[11px] font-bold text-white" style="background: ${cfg.color}; min-width: 80px">
-            <span class="absolute right-full top-1/2 -translate-y-1/2 -mr-px" style="width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-right: 5px solid ${cfg.color}"></span>
-            ${tipIconHtml}
-            ${safeTip}
-          </span>
-        </span>
-      `;
+      const safeTip = tipText.replace(/"/g, "&quot;");
+      
+      // Use standard title attribute to avoid any layout-breaking hidden elements
+      return `<span class="${cfg.base} cursor-help" title="${safeTip}">${safeWord}</span>`;
     };
 
     try {
-      const isAttempted = !!attemptedHtml;
-      const htmlToMap = isAttempted ? attemptedHtml : originalHtml;
+      // PROPRIETARY LOGIC: If originalHtml exists (HighCourt), base the "Comparison" on the Correct Reference's structure
+      // This ensures both panels "look the same" (structure/alignment-wise)
+      const htmlToMap = originalHtml || attemptedHtml; 
+      const isAttempted = !originalHtml && !!attemptedHtml; // If we use originalHtml, we are NOT mapping on student structure
+      
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlToMap, 'text/html');
       
@@ -280,64 +270,61 @@ const DetailedAnalysisPanel = ({
       for (const node of textNodes) {
         const text = node.nodeValue || '';
         const parts = text.split(/(\s+)/);
-        const span = doc.createElement('span');
+        const fragment = doc.createDocumentFragment();
 
         for (const p of parts) {
           if (!p) continue;
           if (/^\s+$/.test(p)) {
-            // It's whitespace.
-            span.appendChild(doc.createTextNode(p));
+            // Preserve existing whitespace
+            fragment.appendChild(doc.createTextNode(p));
           } else {
             // It's a word
             if (isAttempted) {
               // We are mapping on Student's HTML: inject 'missing' words
               while (tokenIdx < enrichedDiff.length && enrichedDiff[tokenIdx].type === 'missing') {
-                const w = doc.createElement('span');
-                w.innerHTML = renderTokenHtml(enrichedDiff[tokenIdx]);
-                span.appendChild(w);
-                span.appendChild(doc.createTextNode(' '));
+                const tempWrap = doc.createElement('span');
+                tempWrap.innerHTML = renderTokenHtml(enrichedDiff[tokenIdx]) + ' ';
+                while(tempWrap.firstChild) fragment.appendChild(tempWrap.firstChild);
                 tokenIdx++;
               }
             } else {
               // We are mapping on Admin HTML: inject 'extra' words
               while (tokenIdx < enrichedDiff.length && enrichedDiff[tokenIdx].type === 'extra') {
-                const w = doc.createElement('span');
-                w.innerHTML = renderTokenHtml(enrichedDiff[tokenIdx]);
-                span.appendChild(w);
-                span.appendChild(doc.createTextNode(' '));
+                const tempWrap = doc.createElement('span');
+                tempWrap.innerHTML = renderTokenHtml(enrichedDiff[tokenIdx]) + ' ';
+                while(tempWrap.firstChild) fragment.appendChild(tempWrap.firstChild);
                 tokenIdx++;
               }
             }
 
             // Now handle the actual word
             if (tokenIdx < enrichedDiff.length) {
-              const wordWrapper = doc.createElement('span');
-              wordWrapper.innerHTML = renderTokenHtml(enrichedDiff[tokenIdx]);
-              span.appendChild(wordWrapper);
+              const tempWrap = doc.createElement('span');
+              tempWrap.innerHTML = renderTokenHtml(enrichedDiff[tokenIdx]) + ' ';
+              while(tempWrap.firstChild) fragment.appendChild(tempWrap.firstChild);
               tokenIdx++;
             } else {
-              span.appendChild(doc.createTextNode(p));
+              fragment.appendChild(doc.createTextNode(p));
             }
           }
         }
-        node.parentNode.insertBefore(span, node);
-        node.parentNode.removeChild(node);
+        node.parentNode.replaceChild(fragment, node);
       }
 
       // Handle trailing tokens
       if (isAttempted) {
         while (tokenIdx < enrichedDiff.length && enrichedDiff[tokenIdx].type === 'missing') {
-          const w = doc.createElement('span');
-          w.innerHTML = renderTokenHtml(enrichedDiff[tokenIdx]) + ' ';
-          doc.body.appendChild(w);
-          tokenIdx++;
+           const tempWrap = doc.createElement('span');
+           tempWrap.innerHTML = renderTokenHtml(enrichedDiff[tokenIdx]) + ' ';
+           while(tempWrap.firstChild) doc.body.appendChild(tempWrap.firstChild);
+           tokenIdx++;
         }
       } else {
         while (tokenIdx < enrichedDiff.length && enrichedDiff[tokenIdx].type === 'extra') {
-          const w = doc.createElement('span');
-          w.innerHTML = renderTokenHtml(enrichedDiff[tokenIdx]) + ' ';
-          doc.body.appendChild(w);
-          tokenIdx++;
+           const tempWrap = doc.createElement('span');
+           tempWrap.innerHTML = renderTokenHtml(enrichedDiff[tokenIdx]) + ' ';
+           while(tempWrap.firstChild) doc.body.appendChild(tempWrap.firstChild);
+           tokenIdx++;
         }
       }
 
