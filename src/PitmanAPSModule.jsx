@@ -71,7 +71,8 @@ const PitmanAPSModule = ({ onBack, onTestComplete, category }) => {
                     const { data, error } = await supabase
                         .from('exercises')
                         .select('*')
-                        .eq('category', 'pitman')
+                        .in('category', ['pitman', 'Pitman Shorthand'])
+                        .eq('is_hidden', false)
                         .order('created_at', { ascending: false });
                     
                     if (!error && data) {

@@ -121,6 +121,7 @@ const HighCourtFormatting = ({ onBack, user }) => {
                         .from('exercises')
                         .select('*')
                         .eq('category', 'highcourt')
+                        .eq('is_hidden', false)
                         .order('created_at', { ascending: false });
                     
                     if (!error && data) {

@@ -129,6 +129,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                 const { data: dbExercises, error: exError } = await supabase
                     .from('exercises')
                     .select('*')
+                    .eq('is_hidden', false)
                     .order('created_at', { ascending: false });
 
                 if (!exError && dbExercises && dbExercises.length > 0) {
