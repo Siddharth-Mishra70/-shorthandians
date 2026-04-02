@@ -77,11 +77,11 @@ const UploadForm = ({ title, setTitle, text, setText, pdf, setPdf, onFileSelect,
     <div className="bg-white p-6 rounded-xl shadow border border-gray-200 mb-6 animate-in slide-in-from-top-2">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
             <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Title</label>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Title <span className="text-red-500">*</span></label>
                 <input type="text" value={title || ''} onChange={e => setTitle(e.target.value)} placeholder="Enter title..." className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-red-500" />
             </div>
             <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">{fileLabel}</label>
+                <label className="block text-sm font-bold text-gray-700 mb-2">{fileLabel} <span className="text-red-500">*</span></label>
                 <label className="flex items-center justify-center w-full bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-3 cursor-pointer hover:bg-red-50 hover:border-red-400 transition-all">
                     <FileUp className="w-4 h-4 mr-2 text-gray-400" />
                     <span className="text-sm text-gray-500">{pdf ? '✓ File loaded' : 'Click to upload'}</span>
@@ -104,8 +104,8 @@ const UploadForm = ({ title, setTitle, text, setText, pdf, setPdf, onFileSelect,
             </div>
         </div>
         <div className="mb-5">
-            <label className="block text-sm font-bold text-gray-700 mb-2">{textLabel}</label>
-            <textarea value={text || ''} onChange={e => setText(e.target.value)} placeholder="Paste text content here..." className="w-full h-40 p-4 font-serif border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-red-500 resize-y" />
+            <label className="block text-sm font-bold text-gray-700 mb-2">{textLabel} <span className="text-red-500">*</span></label>
+            <textarea value={text || ''} onChange={e => setText(e.target.value)} placeholder="Type or paste the correct English text here. This is what students must type to pass." className="w-full h-40 p-4 font-serif border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-red-500 resize-y" />
         </div>
         <div className="flex justify-end space-x-3">
             <button onClick={onCancel} className="px-5 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100 transition-colors">Cancel</button>
@@ -901,7 +901,7 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
             return;
         }
         if (!pitmanText.trim()) {
-            alert('English Text Solution (Transcription) is required.');
+            alert('English Transcription Text (Solution) is required.');
             return;
         }
         
