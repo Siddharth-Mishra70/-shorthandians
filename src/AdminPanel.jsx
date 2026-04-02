@@ -914,7 +914,6 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
         }
         
         setIsUploadingPitman(true);
-        const isEdit = !!editingPitmanId;
         const testId = isEdit ? editingPitmanId : crypto.randomUUID();
         let finalImageUrl = isEdit ? pitmanTests.find(t => t.id === testId)?.image_url || pitmanPdf : pitmanPdf;
 
