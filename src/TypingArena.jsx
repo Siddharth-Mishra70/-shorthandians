@@ -1017,9 +1017,9 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                             </div>
                         )}
 
-                        <div className={`flex-1 p-2 md:p-6 ${selectedExercise?.isAudioCourse ? 'flex flex-col' : 'flex flex-col lg:grid lg:grid-cols-2 gap-4 lg:gap-8'} overflow-y-auto lg:overflow-hidden`}>
+                        <div className={`flex-1 p-2 md:p-6 flex flex-col h-full overflow-hidden`}>
                             {selectedExercise?.isAudioCourse ? (
-                                <div className="flex flex-col space-y-4 h-full min-h-0">
+                                <div className="flex flex-col space-y-4 h-full overflow-hidden min-h-0">
                                     <div className="bg-white border border-gray-200 rounded-2xl p-4 md:p-6 flex flex-col items-center gap-4 md:gap-5 shadow-sm">
                                         
                                         <div className="flex items-center space-x-4 shrink-0 w-full mb-3">
@@ -1108,8 +1108,8 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                             ) : (
                                 <>
                                     {/* Reference Text Area */}
-                                    <div className="flex flex-col h-[30vh] lg:h-full lg:flex-1 min-h-0">
-                                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 shrink-0">Reference Text</h3>
+                                    <div className="flex flex-col h-[40vh] lg:h-[45vh] shrink-0 min-h-0">
+                                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 shrink-0 px-1">Reference Text</h3>
                                         <div 
                                             ref={referenceScrollRef}
                                             className="flex-1 bg-white border border-gray-200 rounded-xl p-3 md:p-5 shadow-sm overflow-y-auto leading-relaxed text-base md:text-lg scroll-smooth min-h-0"
@@ -1119,7 +1119,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                                     </div>
 
                                     {/* User Input Area */}
-                                    <div className="flex flex-col h-[35vh] lg:h-full lg:flex-1 min-h-0">
+                                    <div className="flex flex-col flex-1 min-h-0 mt-2">
                                         <div className="flex items-center justify-between mb-3 shrink-0">
                                             <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Your Translation</h3>
                                             <div className="flex items-center space-x-2">
