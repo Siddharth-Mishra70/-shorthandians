@@ -902,7 +902,7 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                     <div className="flex items-center space-x-6 text-sm md:text-base font-semibold">
                         <div className="flex items-center space-x-2 bg-blue-800/50 px-4 py-2 rounded-lg">
                             <Clock className="w-5 h-5 text-blue-200" />
-                            <span className={`tracking-wider ${timeLeft <= 60 ? 'text-red-300 animate-pulse' : ''}`}>
+                            <span className={`text-2xl font-black tracking-widest ${timeLeft <= 60 ? 'text-red-300 animate-pulse' : 'text-white'}`}>
                                 {formatTime(timeLeft)}
                             </span>
                         </div>
