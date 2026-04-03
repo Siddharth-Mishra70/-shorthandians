@@ -1,9 +1,10 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
     Users, Headphones, Scale, FileText, BarChart2,
     Settings, LogOut, Search, Plus, Trash2, Keyboard, CheckCircle, Save, Loader2, FileUp,
     BookOpen, Edit2, Edit3, Map, ArrowLeft, ChevronRight, Globe, Upload, X, Zap, ChevronDown,
-    Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJustify, Type, RefreshCw, History
+    Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJustify, Type, RefreshCw, History,
+    MessageSquare, Mail
 } from 'lucide-react';
 
 const STATE_EXAMS = [
@@ -283,6 +284,11 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
     const [globalJobTitle, setGlobalJobTitle] = useState('');
     const [globalTestType, setGlobalTestType] = useState('');
 
+    // Inquiries State
+    const [inquiries, setInquiries] = useState([]);
+    const [loadingInquiries, setLoadingInquiries] = useState(false);
+    const [inquirySearchTerm, setInquirySearchTerm] = useState('');
+
     const resetGlobalDocs = () => {
         setGlobalJobTitle('');
         setGlobalTestType('');
@@ -367,9 +373,25 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
             } finally {
                 setLoadingResults(false);
             }
+
+            // Sync Inquiries
+            setLoadingInquiries(true);
+            try {
+                if (supabase && !supabase.supabaseUrl?.includes('placeholder')) {
+                    const { data: inbox } = await supabase.from('contact_inquiries').select('*').order('created_at', { ascending: false });
+                    if (inbox) setInquiries(inbox);
+                } else {
+                    const saved = localStorage.getItem('contact_inquiries');
+                    if (saved) setInquiries(JSON.parse(saved));
+                }
+            } catch (err) {
+                console.warn('Inquiries sync failed:', err);
+            } finally {
+                setLoadingInquiries(false);
+            }
         };
         syncData();
-    }, [supabase]);
+    }, [supabase, currentTab]);
 
     const saveStateExams = (updated) => {
         setStateExams(updated);
@@ -614,6 +636,32 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
         } catch (err) {
             console.error('Delete operation failed:', err);
             alert('Operation failed. Please check your connection.');
+        }
+    };
+
+    const handleStatusChange = async (userId, phone, newStatus) => {
+        // Optimistic UI Update
+        const originalUsers = [...users];
+        const updatedUsers = users.map(u => 
+            (u.phone === phone) ? { ...u, status: newStatus } : u
+        );
+        setUsers(updatedUsers);
+
+        try {
+            if (supabase && !supabase.supabaseUrl?.includes('placeholder')) {
+                const { error } = await supabase
+                    .from('users')
+                    .update({ status: newStatus })
+                    .eq('phone', phone);
+                
+                if (error) throw error;
+            } else {
+                localStorage.setItem('auth_users', JSON.stringify(updatedUsers));
+            }
+        } catch (err) {
+            console.error('Failed to update student status:', err);
+            alert('Error updating status: ' + (err.message || 'Check connection'));
+            setUsers(originalUsers);
         }
     };
 
@@ -1695,7 +1743,27 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
                                 <td className="px-6 py-4 text-sm font-semibold text-gray-800">{u.name}</td>
                                 <td className="px-6 py-4 text-sm text-gray-600">{u.phone}</td>
                                 <td className="px-6 py-4 text-sm text-gray-600">{u.joinedDate}</td>
-                                <td className="px-6 py-4 text-sm"><span className="bg-green-100 text-green-700 px-2.5 py-1 rounded-full text-xs font-bold">Active</span></td>
+                                <td className="px-6 py-4 text-sm">
+                                    <div className="flex items-center space-x-3">
+                                        <button
+                                            onClick={() => handleStatusChange(u.id, u.phone, (u.status || 'Active') === 'Active' ? 'Inactive' : 'Active')}
+                                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                                (u.status || 'Active') === 'Active' ? 'bg-green-500' : 'bg-gray-300'
+                                            }`}
+                                        >
+                                            <span
+                                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                                    (u.status || 'Active') === 'Active' ? 'translate-x-4' : 'translate-x-0'
+                                                }`}
+                                            />
+                                        </button>
+                                        <span className={`text-[10px] font-black uppercase tracking-widest ${
+                                            (u.status || 'Active') === 'Active' ? 'text-green-600' : 'text-gray-400'
+                                        }`}>
+                                            {u.status || 'Active'}
+                                        </span>
+                                    </div>
+                                </td>
                                 <td className="px-6 py-4 text-sm text-right">
                                     <button onClick={() => handleDeleteUser(u.phone)} className="text-red-400 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
                                 </td>
@@ -1848,10 +1916,97 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
         );
     };
 
+    const renderInquiries = () => {
+        const filteredInquiries = inquiries.filter(inq => 
+            (inq.full_name || '').toLowerCase().includes(inquirySearchTerm.toLowerCase()) || 
+            (inq.phone_number || '').includes(inquirySearchTerm) ||
+            (inq.message || '').toLowerCase().includes(inquirySearchTerm.toLowerCase())
+        );
+
+        return (
+            <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h2 className="text-2xl font-black text-gray-900 leading-tight">Incoming Inquiries</h2>
+                        <p className="text-sm font-bold text-gray-400 uppercase tracking-widest mt-1">Lead Management Dashboard</p>
+                    </div>
+                    <div className="relative w-full sm:w-72">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Search in messages..."
+                            value={inquirySearchTerm}
+                            onChange={(e) => setInquirySearchTerm(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 border-2 border-gray-100 rounded-xl focus:border-red-500 outline-none transition-all text-sm font-medium"
+                        />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                    {loadingInquiries ? (
+                        <div className="bg-white p-12 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center justify-center">
+                            <Loader2 className="w-8 h-8 text-red-700 animate-spin mb-3" />
+                            <p className="text-gray-400 font-bold text-sm">Loading messages...</p>
+                        </div>
+                    ) : filteredInquiries.length === 0 ? (
+                        <div className="bg-white p-12 rounded-3xl shadow-sm border border-gray-100 text-center">
+                            <Mail className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                            <p className="text-gray-400 font-bold">No inquiries found.</p>
+                        </div>
+                    ) : filteredInquiries.map(inq => (
+                        <div key={inq.id || inq.created_at} className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 hover:border-red-200 transition-all group relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-red-50 rounded-full translate-x-12 -translate-y-12 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <div className="flex flex-col md:flex-row justify-between gap-4 relative z-10">
+                                <div className="flex items-start gap-4">
+                                    <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center shrink-0">
+                                        <MessageSquare className="w-6 h-6 text-red-700" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-black text-gray-900 text-lg leading-tight">{inq.full_name}</h3>
+                                        <div className="flex items-center gap-3 mt-1">
+                                            <a href={`tel:${inq.phone_number}`} className="text-xs font-bold text-red-700 hover:underline">{inq.phone_number}</a>
+                                            <span className="text-gray-300">•</span>
+                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                                {new Date(inq.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex-1 md:max-w-md">
+                                    <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                                        <p className="text-sm text-gray-700 font-medium whitespace-pre-wrap">{inq.message}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-start md:items-center">
+                                    <button 
+                                        onClick={async () => {
+                                            if (!window.confirm('Mark this inquiry as deleted?')) return;
+                                            if (supabase && !supabase.supabaseUrl?.includes('placeholder')) {
+                                                await supabase.from('contact_inquiries').delete().eq('id', inq.id);
+                                            }
+                                            const updated = inquiries.filter(i => i.id !== inq.id);
+                                            setInquiries(updated);
+                                            localStorage.setItem('contact_inquiries', JSON.stringify(updated));
+                                        }}
+                                        className="p-2 text-gray-300 hover:text-red-700 hover:bg-red-50 rounded-xl transition-all"
+                                        title="Delete Inquiry"
+                                    >
+                                        <Trash2 className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    };
+
     const renderContent = () => {
         if (currentTab === 'students') return renderStudents();
         if (currentTab === 'results') return renderResults();
         if (currentTab === 'content') return renderModuleContent();
+        if (currentTab === 'inquiries') return renderInquiries();
         if (currentTab === 'settings') return (
             <div>
                 <h2 className="text-2xl font-bold text-gray-800 mb-6">System Settings</h2>
@@ -2203,6 +2358,8 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
                             <FileText className="w-5 h-5" />
                             <span className="font-medium">Content Manager</span>
                         </div>
+                        <div className="my-3 border-t border-gray-100" />
+                        <SidebarItem icon={MessageSquare} label="Incoming Inquiries" tabId="inquiries" currentTab={currentTab} onClick={() => { setCurrentTab('inquiries'); setActiveModule('home'); setSelectedState(null); setStateSubModule(null); }} />
                         <div className="my-3 border-t border-gray-100" />
                         <SidebarItem icon={Settings} label="System Settings" tabId="settings" currentTab={currentTab} onClick={() => { setCurrentTab('settings'); setActiveModule('home'); setSelectedState(null); setStateSubModule(null); }} />
                     </nav>

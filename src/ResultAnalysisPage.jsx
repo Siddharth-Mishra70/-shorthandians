@@ -143,7 +143,7 @@ const MistakeList = ({ title, icon: Icon, iconColor, bg, border, items, columns 
 // Performance Gauge Ring
 // ─────────────────────────────────────────────────────────────────────────────
 const AccuracyGauge = ({ accuracy }) => {
-  const pct = Math.min(100, Math.max(0, accuracy));
+  const pct = Math.min(100, Math.max(0, parseFloat(accuracy) || 0));
   const color = pct >= 80 ? '#16a34a' : pct >= 60 ? '#d97706' : '#dc2626';
   const label = pct >= 80 ? 'Excellent' : pct >= 60 ? 'Good' : 'Needs Work';
   const r = 52;
@@ -151,20 +151,22 @@ const AccuracyGauge = ({ accuracy }) => {
   const dash = (pct / 100) * circ;
 
   return (
-    <div className="flex flex-col items-center justify-center">
-      <svg width="130" height="130" className="-rotate-90">
-        <circle cx="65" cy="65" r={r} fill="none" stroke="#e5e7eb" strokeWidth="10" />
-        <circle
-          cx="65" cy="65" r={r} fill="none"
-          stroke={color} strokeWidth="10"
-          strokeDasharray={`${dash} ${circ}`}
-          strokeLinecap="round"
-          style={{ transition: 'stroke-dasharray 1.2s ease-in-out' }}
-        />
-      </svg>
-      <div className="-mt-[86px] flex flex-col items-center">
-        <span className="text-3xl font-black" style={{ color }}>{pct}%</span>
-        <span className="text-xs font-bold text-gray-500">{label}</span>
+    <div className="flex flex-col items-center justify-center relative">
+      <div className="relative">
+        <svg width="130" height="130" className="-rotate-90">
+          <circle cx="65" cy="65" r={r} fill="none" stroke="#e5e7eb" strokeWidth="10" />
+          <circle
+            cx="65" cy="65" r={r} fill="none"
+            stroke={color} strokeWidth="10"
+            strokeDasharray={`${dash} ${circ}`}
+            strokeLinecap="round"
+            style={{ transition: 'stroke-dasharray 1.2s ease-in-out' }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span className="text-3xl font-black" style={{ color }}>{pct}%</span>
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{label}</span>
+        </div>
       </div>
     </div>
   );
@@ -481,14 +483,17 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user, onNavigat
     : accuracyNum >= 60 ? { label: 'Average', color: '#d97706', bg: '#fef3c7' }
     : { label: 'Needs Practice', color: '#dc2626', bg: '#fee2e2' };
 
-  const stats = [
-    { icon: Hash,         value: data.totalWords,     label: 'Total Words',       valueColor: '#1e3a8a', bg: 'bg-blue-50',   border: 'border-blue-100' },
-    { icon: FileText,     value: data.userWords,       label: 'Words Typed',       valueColor: '#0369a1', bg: 'bg-sky-50',    border: 'border-sky-100' },
-    { icon: XCircle,      value: data.totalMistakes,   label: 'Total Mistakes',    valueColor: '#dc2626', bg: 'bg-red-50',    border: 'border-red-100' },
-    { icon: AlertTriangle,value: data.capitalMistakes, label: 'Capital Errors',    valueColor: '#d97706', bg: 'bg-amber-50',  border: 'border-amber-100' },
-    { icon: Type,         value: data.spellingMistakes,label: 'Spelling Errors',   valueColor: '#7c3aed', bg: 'bg-purple-50', border: 'border-purple-100' },
-    { icon: TrendingUp,   value: data.accuracy,        label: 'Accuracy',          valueColor: accColor,  bg: 'bg-green-50',  border: 'border-green-100', suffix: '%' },
-  ];
+    const accBg = accuracyNum >= 80 ? 'bg-green-50' : accuracyNum >= 60 ? 'bg-amber-50' : 'bg-red-50';
+    const accBorder = accuracyNum >= 80 ? 'border-green-100' : accuracyNum >= 60 ? 'border-amber-100' : 'border-red-100';
+
+    const stats = [
+        { icon: Hash,         value: data.totalWords,     label: 'Total Words',       valueColor: '#1e3a8a', bg: 'bg-blue-50',   border: 'border-blue-100' },
+        { icon: FileText,     value: data.userWords,       label: 'Words Typed',       valueColor: '#0369a1', bg: 'bg-sky-50',    border: 'border-sky-100' },
+        { icon: XCircle,      value: data.totalMistakes,   label: 'Total Mistakes',    valueColor: '#dc2626', bg: 'bg-red-50',    border: 'border-red-100' },
+        { icon: AlertTriangle,value: data.capitalMistakes, label: 'Capital Errors',    valueColor: '#d97706', bg: 'bg-amber-50',  border: 'border-amber-100' },
+        { icon: Type,         value: data.spellingMistakes,label: 'Spelling Errors',   valueColor: '#7c3aed', bg: 'bg-purple-50', border: 'border-purple-100' },
+        { icon: TrendingUp,   value: data.accuracy,        label: 'Accuracy',          valueColor: accColor,  bg: accBg,         border: accBorder, suffix: '%' },
+    ];
 
   const mistakeSections = [
     { title: 'Missing Words',           icon: MinusCircle,   iconColor: '#dc2626', bg: 'bg-red-50',    border: 'border-red-100',    items: data.missingWords,   columns: 1 },
@@ -637,31 +642,35 @@ const ResultAnalysisPage = ({ data: propData, attemptId, onBack, user, onNavigat
                 <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4 print:mb-2 flex items-center gap-2">
                   <Target className="w-4 h-4 text-[#1e3a8a]" /> Performance Snapshot
                 </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
                   {/* Accuracy Gauge */}
-                  <div className="sm:col-span-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col items-center justify-center">
+                  <div className="sm:col-span-4 bg-white rounded-3xl border border-gray-100 shadow-sm p-8 flex flex-col items-center justify-center relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-gray-50 rounded-full translate-x-12 -translate-y-12 transition-transform duration-500 group-hover:scale-150" />
                     <AccuracyGauge accuracy={accuracyNum} />
-                    <p className="text-xs font-bold text-gray-400 mt-2 uppercase tracking-widest">Overall Accuracy</p>
+                    <p className="text-[10px] font-black text-gray-400 mt-4 uppercase tracking-[0.2em] relative z-10">Overall Accuracy</p>
                   </div>
 
                   {/* Stats Grid 2x2 */}
-                  <div className="sm:col-span-2 grid grid-cols-2 gap-3">
+                  <div className="sm:col-span-8 grid grid-cols-2 gap-3">
                     {[
-                      { icon: Hash,         label: 'Total Words',    value: data.totalWords,      color: '#1e3a8a', bg: '#eff6ff' },
-                      { icon: CheckCircle2, label: 'Words Typed',    value: data.userWords,       color: '#0369a1', bg: '#f0f9ff' },
-                      { icon: XCircle,      label: 'Total Mistakes', value: data.totalMistakes,   color: '#dc2626', bg: '#fef2f2' },
-                      { icon: TrendingUp,   label: 'WPM',            value: data.wpm ?? (parseFloat(data.speed) || 0), color: '#7c3aed', bg: '#faf5ff' },
-                    ].map(({ icon: Icon, label, value, color, bg }) => (
-                      <div key={label} className="rounded-2xl border border-gray-100 p-4 flex items-center gap-3" style={{ background: bg }}>
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: color + '20' }}>
-                          <Icon className="w-5 h-5" style={{ color }} />
+                      { icon: Hash,         label: 'Total Words',    value: data.totalWords,      color: '#1e3a8a', bg: '#eff6ff', description: 'Maximum possible' },
+                      { icon: FileText,     label: 'Words Typed',    value: data.userWords,       color: '#0369a1', bg: '#f0f9ff', description: 'Your input length' },
+                      { icon: XCircle,      label: 'Total Mistakes', value: data.totalMistakes,   color: '#dc2626', bg: '#fef2f2', description: 'Errors detected' },
+                      { icon: Zap,          label: 'Typing Speed',   value: (data.wpm ?? (parseFloat(data.speed) || 0)), color: '#7c3aed', bg: '#faf5ff', description: 'Words per minute', suffix: ' WPM' },
+                    ].map(({ icon: Icon, label, value, color, bg, description, suffix = '' }) => (
+                      <div key={label} className="rounded-3xl border border-gray-100 p-5 flex flex-col justify-between transition-all hover:shadow-md" style={{ background: bg }}>
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: color + '15' }}>
+                                <Icon className="w-5 h-5" style={{ color }} />
+                            </div>
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{description}</span>
                         </div>
                         <div>
-                          <p className="text-2xl font-black leading-none" style={{ color }}>
+                          <p className="text-3xl font-black leading-tight tracking-tight" style={{ color }}>
                             <AnimatedNumber value={value} />
+                            <span className="text-sm ml-0.5 opacity-70">{suffix}</span>
                           </p>
-                          <p className="text-xs font-semibold text-gray-500 mt-0.5">{label}</p>
+                          <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{label}</p>
                         </div>
                       </div>
                     ))}

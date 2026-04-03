@@ -843,181 +843,181 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
     }
 
     return (
-        <div className="min-h-[100dvh] flex-1 bg-gray-50 flex flex-col font-sans text-lg overflow-hidden relative">
-            <div className="w-full h-full bg-white shadow-xl overflow-hidden border border-gray-100 flex flex-col relative transition-all duration-300">
+        <div className="h-[100dvh] w-full bg-gray-50 flex flex-col font-sans text-lg overflow-hidden relative">
+            <div className="flex-1 flex flex-col w-full bg-white shadow-xl overflow-hidden border border-gray-100 relative transition-all duration-300">
 
-                {/* Top Bar */}
-                <div className="bg-[#1e3a8a] text-white px-4 py-2.5 flex flex-col md:flex-row justify-between items-center space-y-3 md:space-y-0 shadow-md shrink-0">
-                    <div className="flex items-center space-x-2">
-                        <select
-                            className="bg-blue-800/50 text-white text-[11px] font-black uppercase tracking-wider px-2 py-1.5 rounded-lg outline-none border border-blue-700/50 focus:border-blue-400 max-w-[140px] truncate"
-                            value={courses ? (courses.find(c => c.id === initialCourse)?.view || '') : (selectedExercise?.id || '')}
-                            onChange={(e) => {
-                                if (onNavigateCourse && courses) {
-                                    onNavigateCourse(e.target.value);
-                                } else {
-                                    const ex = availableExercises.find(x => x.id === e.target.value);
-                                    if (ex) {
-                                        const finalEx = { ...ex, isAudioCourse: ex.category === 'audio' };
-                                        setSelectedExercise(finalEx);
-                                        handleReset();
+                {/* Sticky Control Header (Timer + Audio) */}
+                <div className="sticky top-0 z-50 bg-white shrink-0 shadow-sm">
+                    {/* Top Bar */}
+                    <div className="bg-[#1e3a8a] text-white px-4 py-2.5 flex flex-col md:flex-row justify-between items-center space-y-3 md:space-y-0 shadow-md">
+                        <div className="flex items-center space-x-2">
+                            <select
+                                className="bg-blue-800/50 text-white text-[11px] font-black uppercase tracking-wider px-2 py-1.5 rounded-lg outline-none border border-blue-700/50 focus:border-blue-400 max-w-[140px] truncate"
+                                value={courses ? (courses.find(c => c.id === initialCourse)?.view || '') : (selectedExercise?.id || '')}
+                                onChange={(e) => {
+                                    if (onNavigateCourse && courses) {
+                                        onNavigateCourse(e.target.value);
+                                    } else {
+                                        const ex = availableExercises.find(x => x.id === e.target.value);
+                                        if (ex) {
+                                            const finalEx = { ...ex, isAudioCourse: ex.category === 'audio' };
+                                            setSelectedExercise(finalEx);
+                                            handleReset();
+                                        }
                                     }
-                                }
-                            }}
-                            disabled={isStarted}
-                        >
-                            {courses ? courses.map(c => (
-                                <option key={c.view} value={c.view} className="bg-white text-gray-900">{c.title}</option>
-                            )) : availableExercises.map(ex => (
-                                <option key={ex.id} value={ex.id} className="bg-white text-gray-900">{ex.title}</option>
-                            ))}
-                        </select>
-                        <div className="flex items-center space-x-2 ml-2 border-l border-blue-400/30 pl-2 hidden lg:flex">
-                            <select
-                                className="bg-blue-800/50 text-white text-[11px] font-black px-2 py-1.5 rounded-lg outline-none border border-blue-700/50 focus:border-blue-400"
-                                value={selectedDuration}
-                                onChange={(e) => setSelectedDuration(Number(e.target.value))}
+                                }}
                                 disabled={isStarted}
                             >
-                                {Array.from({length: 11}, (_, i) => i + 5).map(m => (
-                                    <option key={m} value={m} className="bg-white text-gray-900">{m} Min</option>
+                                {courses ? courses.map(c => (
+                                    <option key={c.view} value={c.view} className="bg-white text-gray-900">{c.title}</option>
+                                )) : availableExercises.map(ex => (
+                                    <option key={ex.id} value={ex.id} className="bg-white text-gray-900">{ex.title}</option>
                                 ))}
                             </select>
-                            <select
-                                className="bg-blue-800/50 text-white text-[11px] font-black px-2 py-1.5 rounded-lg outline-none border border-blue-700/50 focus:border-blue-400"
-                                value={targetWpm}
-                                onChange={(e) => setTargetWpm(Number(e.target.value))}
-                                disabled={isStarted}
-                            >
-                                {Array.from({length: 12}, (_, i) => 40 + (i * 10)).map(w => (
-                                    <option key={w} value={w} className="bg-white text-gray-900">{w} WPM</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center space-x-3 text-sm font-bold">
-                        <div className="flex items-center space-x-1.5 bg-blue-900/40 px-3 py-1.5 rounded-xl border border-blue-700/30">
-                            <Clock className="w-4 h-4 text-blue-200" />
-                            <span className={`text-xl font-black tabular-nums tracking-widest ${timeLeft <= 60 ? 'text-red-400 animate-pulse' : 'text-white'}`}>
-                                {formatTime(timeLeft)}
-                            </span>
-                        </div>
-
-                        <div className="flex items-center space-x-1.5 bg-blue-900/40 px-3 py-1.5 rounded-xl border border-blue-700/30 hidden sm:flex">
-                            <Activity className="w-4 h-4 text-blue-200" />
-                            <span className="text-xs uppercase tracking-tight">{Math.max(0, wpm)} WPM</span>
-                        </div>
-
-                        {/* Top Control Section for Audio Dictations */}
-                        {selectedExercise.isAudioCourse && (
-                            <div className="flex items-center space-x-2 pl-2 border-l border-blue-400/30">
-                                {!isTestActive && countdown === null ? (
-                                    <button
-                                        onClick={() => setCountdown(5)}
-                                        className="px-4 py-1.5 bg-green-500 hover:bg-green-600 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all shadow-lg active:scale-95 flex items-center space-x-1.5"
-                                    >
-                                        <Play className="w-3.5 h-3.5 fill-current" />
-                                        <span>START TEST</span>
-                                    </button>
-                                ) : countdown !== null ? (
-                                    <div className="px-4 py-1.5 bg-red-600 text-white text-xs font-black uppercase tracking-widest rounded-lg animate-pulse flex items-center space-x-2 border border-red-400">
-                                        <Clock className="w-4 h-4" />
-                                        <span>{countdown}s</span>
-                                    </div>
-                                ) : (
-                                    <div className="px-4 py-1.5 bg-white/10 border border-white/20 text-white text-[10px] font-black uppercase tracking-widest rounded-lg flex items-center space-x-1.5">
-                                        <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                                        <span>LIVE</span>
-                                    </div>
-                                )}
+                            <div className="flex items-center space-x-2 ml-2 border-l border-blue-400/30 pl-2 hidden lg:flex">
+                                <select
+                                    className="bg-blue-800/50 text-white text-[11px] font-black px-2 py-1.5 rounded-lg outline-none border border-blue-700/50 focus:border-blue-400"
+                                    value={selectedDuration}
+                                    onChange={(e) => setSelectedDuration(Number(e.target.value))}
+                                    disabled={isStarted}
+                                >
+                                    {Array.from({length: 11}, (_, i) => i + 5).map(m => (
+                                        <option key={m} value={m} className="bg-white text-gray-900">{m} Min</option>
+                                    ))}
+                                </select>
+                                <select
+                                    className="bg-blue-800/50 text-white text-[11px] font-black px-2 py-1.5 rounded-lg outline-none border border-blue-700/50 focus:border-blue-400"
+                                    value={targetWpm}
+                                    onChange={(e) => setTargetWpm(Number(e.target.value))}
+                                    disabled={isStarted}
+                                >
+                                    {Array.from({length: 12}, (_, i) => 40 + (i * 10)).map(w => (
+                                        <option key={w} value={w} className="bg-white text-gray-900">{w} WPM</option>
+                                    ))}
+                                </select>
                             </div>
-                        )}
+                        </div>
 
-                        <div className="flex items-center space-x-2 pl-2 border-l border-blue-400/30">
-                            <button
-                                onClick={toggleFullscreen}
-                                className="w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-lg transition-all active:scale-95"
-                            >
-                                {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
-                            </button>
-                            <button
-                                onClick={handleReset}
-                                className="px-3 py-1.5 bg-white/10 hover:bg-red-500/20 border border-white/20 text-white text-[10px] font-black uppercase tracking-widest rounded-lg transition-all active:scale-95"
-                            >
-                                Reset
-                            </button>
-                            <button
-                                onClick={handleSubmit}
-                                disabled={!isStarted && inputText.length === 0}
-                                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-lg flex items-center space-x-1.5 active:scale-95 ${(!isStarted && inputText.length === 0)
-                                    ? 'bg-blue-400/50 text-blue-200 cursor-not-allowed border border-blue-400/50'
-                                    : 'bg-green-500 hover:bg-green-600 text-white'
-                                    }`}
-                            >
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>Submit</span>
-                            </button>
+                        <div className="flex items-center space-x-3 text-sm font-bold">
+                            <div className="flex items-center space-x-1.5 bg-blue-900/40 px-3 py-1.5 rounded-xl border border-blue-700/30">
+                                <Clock className="w-4 h-4 text-blue-200" />
+                                <span className={`text-xl font-black tabular-nums tracking-widest ${timeLeft <= 60 ? 'text-red-400 animate-pulse' : 'text-white'}`}>
+                                    {formatTime(timeLeft)}
+                                </span>
+                            </div>
+
+                            <div className="flex items-center space-x-1.5 bg-blue-900/40 px-3 py-1.5 rounded-xl border border-blue-700/30 hidden sm:flex">
+                                <Activity className="w-4 h-4 text-blue-200" />
+                                <span className="text-xs uppercase tracking-tight">{Math.max(0, wpm)} WPM</span>
+                            </div>
+
+                            {/* Top Control Section for Audio Dictations */}
+                            {selectedExercise.isAudioCourse && (
+                                <div className="flex items-center space-x-2 pl-2 border-l border-blue-400/30">
+                                    {!isTestActive && countdown === null ? (
+                                        <button
+                                            onClick={() => setCountdown(5)}
+                                            className="px-4 py-1.5 bg-green-500 hover:bg-green-600 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all shadow-lg active:scale-95 flex items-center space-x-1.5"
+                                        >
+                                            <Play className="w-3.5 h-3.5 fill-current" />
+                                            <span>START TEST</span>
+                                        </button>
+                                    ) : countdown !== null ? (
+                                        <div className="px-4 py-1.5 bg-red-600 text-white text-xs font-black uppercase tracking-widest rounded-lg animate-pulse flex items-center space-x-2 border border-red-400">
+                                            <Clock className="w-4 h-4" />
+                                            <span>{countdown}s</span>
+                                        </div>
+                                    ) : (
+                                        <div className="px-4 py-1.5 bg-white/10 border border-white/20 text-white text-[10px] font-black uppercase tracking-widest rounded-lg flex items-center space-x-1.5">
+                                            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                                            <span>LIVE</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="flex items-center space-x-2 pl-2 border-l border-blue-400/30">
+                                <button
+                                    onClick={toggleFullscreen}
+                                    className="w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-lg transition-all active:scale-95"
+                                >
+                                    {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
+                                </button>
+                                <button
+                                    onClick={handleReset}
+                                    className="px-3 py-1.5 bg-white/10 hover:bg-red-500/20 border border-white/20 text-white text-[10px] font-black uppercase tracking-widest rounded-lg transition-all active:scale-95"
+                                >
+                                    Reset
+                                </button>
+                                <button
+                                    onClick={handleSubmit}
+                                    disabled={!isStarted && inputText.length === 0}
+                                    className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-lg flex items-center space-x-1.5 active:scale-95 ${(!isStarted && inputText.length === 0)
+                                        ? 'bg-blue-400/50 text-blue-200 cursor-not-allowed border border-blue-400/50'
+                                        : 'bg-green-500 hover:bg-green-600 text-white'
+                                        }`}
+                                >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Submit</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
+
+                    {/* Integrated Audio Controller (for standard exercises with audio) */}
+                    {!selectedExercise?.isAudioCourse && (
+                        <div className="p-4 bg-gray-50 border-b border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
+                            <div className="flex items-center space-x-4">
+                                <button
+                                    onClick={togglePlayPause}
+                                    className="w-10 h-10 bg-[#1e3a8a] hover:bg-blue-800 text-white rounded-full flex items-center justify-center shadow-md transition-transform active:scale-95"
+                                >
+                                    {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-1" />}
+                                </button>
+                                <button
+                                    onClick={resetAudio}
+                                    className="w-8 h-8 bg-white border border-gray-300 text-gray-600 hover:text-[#1e3a8a] hover:border-[#1e3a8a] rounded-full flex items-center justify-center shadow-sm transition-colors"
+                                    title="Restart Audio"
+                                >
+                                    <RotateCcw className="w-4 h-4" />
+                                </button>
+                                <div className="flex flex-col ml-2">
+                                    <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Audio Dictation</span>
+                                    <div className="w-32 md:w-48 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-[#1e3a8a] transition-all duration-100 ease-linear"
+                                            style={{ width: `${audioProgress}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Speed Controller */}
+                            <div className="flex items-center bg-white border border-gray-200 rounded-xl shadow-sm p-0.5 overflow-x-auto max-w-full">
+                                <Volume2 className="w-3.5 h-3.5 text-gray-400 mx-2 shrink-0" />
+                                <div className="flex space-x-1 border-l border-gray-100 pl-2">
+                                    {[0.5, 0.75, 1.0, 1.25, 1.5].map(speed => (
+                                        <button
+                                            key={speed}
+                                            onClick={() => changeSpeed(speed)}
+                                            className={`px-2 py-1 text-[10px] font-black rounded-lg transition-colors ${playbackSpeed === speed
+                                                ? 'bg-[#1e3a8a] text-white shadow-sm'
+                                                : 'text-gray-500 hover:bg-gray-100'
+                                                }`}
+                                        >
+                                            {speed}x
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
-                {/* Content Layout */}
-                <div className="flex flex-1 overflow-hidden min-h-0">
-                    
-                    {/* Main Arena Content */}
-                    <div className="flex-1 flex flex-col w-full relative min-h-0">
-                        <div className="flex-1 flex flex-col overflow-hidden w-full relative min-h-0 custom-scrollbar">
-                        {/* Action / Dictation Area (Hide in Audio Mode as it's now integrated) */}
-                        {!selectedExercise?.isAudioCourse && (
-                            <div className="p-6 bg-blue-50/30 border-b border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
-                                <div className="flex items-center space-x-4">
-                                    <button
-                                        onClick={togglePlayPause}
-                                        className="w-12 h-12 bg-[#1e3a8a] hover:bg-blue-800 text-white rounded-full flex items-center justify-center shadow-md transition-transform active:scale-95"
-                                    >
-                                        {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
-                                    </button>
-                                    <button
-                                        onClick={resetAudio}
-                                        className="w-10 h-10 bg-white border border-gray-300 text-gray-600 hover:text-[#1e3a8a] hover:border-[#1e3a8a] rounded-full flex items-center justify-center shadow-sm transition-colors"
-                                        title="Restart Audio"
-                                    >
-                                        <RotateCcw className="w-5 h-5" />
-                                    </button>
-                                    <div className="flex flex-col ml-4">
-                                        <span className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Audio Dictation</span>
-                                        <div className="w-48 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                            <div
-                                                className="h-full bg-[#1e3a8a] transition-all duration-100 ease-linear"
-                                                style={{ width: `${audioProgress}%` }}
-                                            ></div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Speed Controller */}
-                                <div className="flex items-center bg-white border border-gray-200 rounded-xl shadow-sm p-1 overflow-x-auto max-w-full">
-                                    <Volume2 className="w-4 h-4 text-gray-400 mx-2 shrink-0" />
-                                    <div className="flex space-x-1 border-l border-gray-100 pl-2">
-                                        {[0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map(speed => (
-                                            <button
-                                                key={speed}
-                                                onClick={() => changeSpeed(speed)}
-                                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${playbackSpeed === speed
-                                                    ? 'bg-[#1e3a8a] text-white shadow-sm'
-                                                    : 'text-gray-600 hover:bg-gray-100'
-                                                    }`}
-                                            >
-                                                {speed}x
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        <div className={`flex-1 p-2 md:p-6 flex flex-col h-full overflow-hidden`}>
+                {/* Content Layout - Scrollable Content Area */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50/30">
+                    <div className="w-full relative min-h-full flex flex-col">
+                        <div className="w-full px-4 py-6 md:py-8 flex-1 flex flex-col">
                             {selectedExercise?.isAudioCourse ? (
                                 <div className="flex flex-col space-y-4 h-full overflow-hidden min-h-0">
                                     <div className="bg-white border border-gray-200 rounded-2xl p-4 md:p-6 flex flex-col items-center gap-4 md:gap-5 shadow-sm">
@@ -1183,8 +1183,6 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
                                 </>
                             )}
                         </div>
-
-                        
                     </div>
                 </div>
             </div>
@@ -1258,7 +1256,6 @@ const TypingArena = ({ initialCourse = 'kc-1', onTestComplete, courses, onNaviga
             
 
             </div>
-        </div>
     );
 };
 

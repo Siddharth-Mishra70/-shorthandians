@@ -118,21 +118,38 @@ body {
 
 /* ─── Print / PDF Styles ────────────────────────────────────── */
 @media print {
-  /* Hide everything except the report */
-  body > * { display: none !important; }
+  /* 
+     Hide all elements by default and selectively show the report.
+     Using visibility:hidden on body and visibility:visible on report 
+     is more reliable for React projects.
+  */
+  body {
+    visibility: hidden;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  #printable-report {
+    visibility: visible;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    box-shadow: none !important;
+  }
+
   #printable-report,
-  #printable-report * { display: revert !important; }
+  #printable-report * {
+    visibility: visible !important;
+  }
 
   /* Page setup */
   @page {
     size: A4;
-    margin: 12mm 14mm;
-  }
-
-  body {
-    background: #fff !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    margin: 0; /* Let #printable-report handle padding/margins */
   }
 
   /* Remove screen-only elements */
@@ -145,11 +162,18 @@ body {
   }
 
   /* Avoid page breaks inside cards */
-  .rounded-2xl, .rounded-xl {
+  .rounded-2xl, .rounded-xl, .bg-white {
     page-break-inside: avoid;
     break-inside: avoid;
   }
 
-  /* Remove scrollbars in print */
-  .overflow-y-auto { overflow: visible !important; max-height: none !important; }
+  /* Remove scrollbars and force full height */
+  .overflow-y-auto { 
+    overflow: visible !important; 
+    max-height: none !important; 
+    height: auto !important;
+  }
+  
+  /* Hide the action bar specifically if it's not caught by print:hidden */
+  nav, .sticky { display: none !important; }
 }

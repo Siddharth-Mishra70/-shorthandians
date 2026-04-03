@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { supabase } from './supabaseClient';
 import {
   MapPin,
   Phone,
@@ -13,6 +14,7 @@ import {
   CheckCircle,
   ExternalLink,
   PhoneCall,
+  Loader2,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -159,14 +161,47 @@ const ContactSection = () => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.name || !form.phone || !form.message) return;
+    
     setLoading(true);
-    // Simulate submit delay
-    setTimeout(() => {
-      setLoading(false);
+    
+    try {
+      if (supabase && !supabase.supabaseUrl?.includes('placeholder')) {
+        const { error } = await supabase
+          .from('contact_inquiries')
+          .insert([
+            {
+              full_name: form.name,
+              phone_number: form.phone,
+              message: form.message,
+              created_at: new Date().toISOString(),
+            },
+          ]);
+
+        if (error) throw error;
+      } else {
+        // Fallback to localStorage if Supabase is not configured yet
+        const existing = JSON.parse(localStorage.getItem('contact_inquiries') || '[]');
+        const newInquiry = {
+          id: Date.now(),
+          full_name: form.name,
+          phone_number: form.phone,
+          message: form.message,
+          created_at: new Date().toISOString(),
+        };
+        localStorage.setItem('contact_inquiries', JSON.stringify([newInquiry, ...existing]));
+      }
+      
+      setForm({ name: '', phone: '', message: '' });
       setSubmitted(true);
-    }, 1200);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      alert('Failed to send message. Please try again or contact via WhatsApp.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const contactInfo = [
