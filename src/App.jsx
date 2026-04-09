@@ -572,7 +572,7 @@ function App() {
               </div>
             </aside>
 
-  // Dashboard Content
+            {/* Dashboard Content */}
             <main className={`flex-1 overflow-y-auto bg-gray-50 bg-dot-pattern ${currentView === 'dashboard' ? 'p-6 lg:p-10' : 'p-0'}`}>
               {currentView === 'dashboard' ? (
                   <>

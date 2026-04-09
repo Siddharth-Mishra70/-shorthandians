@@ -27,7 +27,7 @@ const StatusBadge = ({ status }) => {
 // ─── Status Dropdown for each row ─────────────────────────────────────────
 const StatusDropdown = ({ userId, currentStatus, onUpdate, isUpdating }) => {
   const [open, setOpen] = useState(false);
-  const statuses = ['active', 'pending', 'inactive'];
+  const statuses = ['active', 'inactive'];
 
   const handleSelect = (s) => {
     if (s === currentStatus) { setOpen(false); return; }
@@ -202,7 +202,7 @@ const AdminUserManagement = () => {
           <div>
             <h2 className="text-2xl font-black text-gray-900 leading-none">Student Management</h2>
             <p className="text-xs font-black text-gray-400 uppercase tracking-widest mt-1">
-              OTP Approval Dashboard
+              Active/Disabled Management
             </p>
           </div>
         </div>
@@ -221,7 +221,6 @@ const AdminUserManagement = () => {
         {[
           { label: 'Total Students', value: stats.total,    color: 'text-[#1e3a8a]', bg: 'bg-blue-50',   border: 'border-blue-100', icon: Users       },
           { label: 'Active',         value: stats.active,   color: 'text-green-700', bg: 'bg-green-50',  border: 'border-green-100',icon: UserCheck    },
-          { label: 'Pending',        value: stats.pending,  color: 'text-amber-700', bg: 'bg-amber-50',  border: 'border-amber-100',icon: Clock        },
           { label: 'Blocked',        value: stats.inactive, color: 'text-red-700',   bg: 'bg-red-50',    border: 'border-red-100',  icon: ShieldAlert  },
         ].map(({ label, value, color, bg, border, icon: Icon }) => (
           <div key={label} className={`${bg} border ${border} rounded-2xl p-4 flex items-center gap-3`}>
@@ -251,7 +250,7 @@ const AdminUserManagement = () => {
         </div>
         {/* Status filter pills */}
         <div className="flex items-center gap-2 flex-wrap">
-          {['all', 'active', 'pending', 'inactive'].map((s) => (
+          {['all', 'active', 'inactive'].map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
@@ -387,14 +386,6 @@ const AdminUserManagement = () => {
             <p className="text-xs font-black text-gray-400 uppercase tracking-widest">
               Showing {filteredUsers.length} of {users.length} students
             </p>
-            {stats.pending > 0 && (
-              <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5">
-                <Clock className="w-3.5 h-3.5 text-amber-500" />
-                <span className="text-xs font-black text-amber-700">
-                  {stats.pending} student{stats.pending !== 1 ? 's' : ''} awaiting approval
-                </span>
-              </div>
-            )}
           </div>
         )}
       </div>

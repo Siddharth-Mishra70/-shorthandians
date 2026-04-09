@@ -73,7 +73,6 @@ const AuthFlow = ({ onAuthSuccess, onBack }) => {
 
     try {
       // Step A: Supabase Auth Sign Up
-      // This sends the OTP/Confirmation email
       const { data, error: signUpErr } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -87,36 +86,12 @@ const AuthFlow = ({ onAuthSuccess, onBack }) => {
 
       if (signUpErr) throw signUpErr;
 
-      // Move to OTP screen
-      setTab('otp');
-    } catch (err) {
-      setError(err.message || 'Registration failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 2. OTP VERIFICATION logic
-  const handleVerifyOtp = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    clearMessages();
-
-    try {
-      const { error: verifyErr } = await supabase.auth.verifyOtp({
-        email: formData.email,
-        token: otpToken,
-        type: 'signup',
-      });
-
-      if (verifyErr) throw verifyErr;
-
-      // Success: OTP Verified. Now sync with our custom 'users' table
+      // Ensure user inserted with active status
       const { error: dbErr } = await supabase.from('users').insert([{
         first_name: formData.name,
         email: formData.email,
         phone: formData.phone,
-        status: 'pending',
+        status: 'active',
         role: 'student',
         joinedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         created_at: new Date().toISOString()
@@ -124,12 +99,19 @@ const AuthFlow = ({ onAuthSuccess, onBack }) => {
 
       if (dbErr) throw dbErr;
 
-      // Verify successful - DO NOT LOG IN. Show pending approval screen.
-      // We force sign out just in case verifyOtp auto-sessions
-      await supabase.auth.signOut();
-      setTab('pending');
+      // Auto-login after registration
+      const finalUser = {
+        first_name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        status: 'active',
+        role: 'student',
+      };
+      
+      localStorage.setItem('currentUser', JSON.stringify(finalUser));
+      onAuthSuccess?.(finalUser);
     } catch (err) {
-      setError(err.message || 'Verification failed. Incorrect OTP?');
+      setError(err.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -142,13 +124,44 @@ const AuthFlow = ({ onAuthSuccess, onBack }) => {
     clearMessages();
 
     try {
-      const authParams = { email: formData.loginIdentifier.trim().toLowerCase(), password: formData.password };
+      // --- Hardcoded Admin Bypass ---
+      if (formData.loginIdentifier === '9999999999' && formData.password === 'admin123') {
+        const adminUser = {
+          role: 'admin',
+          first_name: 'Admin',
+          name: 'Admin',
+          status: 'active',
+          phone: '9999999999'
+        };
+        localStorage.setItem('currentUser', JSON.stringify(adminUser));
+        onAuthSuccess?.(adminUser);
+        setLoading(false);
+        return;
+      }
+
+      let emailForAuth = formData.loginIdentifier.trim().toLowerCase();
+
+      if (/^\d{10,}$/.test(emailForAuth)) {
+        const { data: userByPhone, error: phoneErr } = await supabase
+          .from('users')
+          .select('email')
+          .eq('phone', emailForAuth)
+          .maybeSingle();
+
+        if (!phoneErr && userByPhone?.email) {
+          emailForAuth = userByPhone.email;
+        } else {
+          throw new Error('Account with this phone number not found.');
+        }
+      }
+
+      const authParams = { email: emailForAuth, password: formData.password };
 
       const { data: authData, error: authErr } = await supabase.auth.signInWithPassword(authParams);
       if (authErr) throw authErr;
 
       // --- ADMIN GUARD: Fetch status from custom table ---
-      const emailToLookup = formData.loginIdentifier.trim().toLowerCase();
+      const emailToLookup = emailForAuth;
       
       const { data: userRecord, error: fetchErr } = await supabase
         .from('users')
@@ -161,12 +174,7 @@ const AuthFlow = ({ onAuthSuccess, onBack }) => {
         throw new Error('Account record missing. Please contact support.');
       }
 
-      // Check Status
-      if (userRecord.status === 'pending') {
-        await supabase.auth.signOut();
-        setError('Your account is still pending Admin approval.');
-        return;
-      }
+
 
       if (userRecord.status === 'inactive') {
         await supabase.auth.signOut();
@@ -258,10 +266,10 @@ const AuthFlow = ({ onAuthSuccess, onBack }) => {
               {tab === 'login' && (
                 <form onSubmit={handleSignIn} className="space-y-6">
                   <Input 
-                    label="Email Address" 
+                    label="Email Address or Phone" 
                     icon={Mail} 
-                    type="email"
-                    placeholder="name@gmail.com" 
+                    type="text"
+                    placeholder="name@gmail.com or 9999999999" 
                     value={formData.loginIdentifier}
                     onChange={(e) => setFormData({...formData, loginIdentifier: e.target.value})}
                     required

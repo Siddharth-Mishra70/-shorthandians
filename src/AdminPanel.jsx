@@ -355,9 +355,17 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
                     const mergedResults = resultsInDb.map(test => {
                         const foundUser = usersInDb.find(u => u.id === test.user_id);
                         
-                        // Priority: Match found in DB > Manual JSON data name > Redundant student_name > Unknown
+                        // Priority: Match found in DB (Name or First+Last) > Manual JSON data name > Redundant student_name > Unknown
                         const fallbackName = test.student_name || test.mistakes_data?.student_name;
-                        const studentNameValue = foundUser ? foundUser.name : (fallbackName || 'Unknown Student');
+                        
+                        let studentNameValue = 'Unknown Student';
+                        if (foundUser) {
+                            studentNameValue = foundUser.name || `${foundUser.first_name || ''} ${foundUser.last_name || ''}`.trim();
+                        } else if (fallbackName) {
+                            studentNameValue = fallbackName;
+                        }
+
+                        if (!studentNameValue) studentNameValue = 'Unknown Student';
 
                         return {
                             ...test,
@@ -1805,8 +1813,8 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
         const filteredResults = allResults.filter(res => {
             const matchesDate = selectedResultDate === 'All' || new Date(res.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) === selectedResultDate;
             const matchesSearch = !resultSearchTerm || 
-                res.studentAuthName.toLowerCase().includes(resultSearchTerm.toLowerCase()) || 
-                res.exercise_title.toLowerCase().includes(resultSearchTerm.toLowerCase());
+                (res.studentAuthName || '').toLowerCase().includes(resultSearchTerm.toLowerCase()) || 
+                (res.exercise_title || '').toLowerCase().includes(resultSearchTerm.toLowerCase());
             return matchesDate && matchesSearch;
         });
 
@@ -1907,10 +1915,10 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
                                         <td className="px-8 py-6 whitespace-nowrap">
                                             <div className="flex items-center gap-4">
                                                 <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-white to-gray-50 text-red-700 flex items-center justify-center font-black text-base border border-gray-100 shadow-sm group-hover:bg-red-700 group-hover:text-white group-hover:border-red-700 transition-all duration-300 overflow-hidden">
-                                                    {res.studentAuthName.charAt(0).toUpperCase()}
+                                                    {(res.studentAuthName || 'S').charAt(0).toUpperCase()}
                                                 </div>
                                                 <div className="flex flex-col space-y-0.5">
-                                                    <span className="text-sm font-black text-gray-900 leading-none group-hover:text-red-700 transition-colors">{res.studentAuthName}</span>
+                                                    <span className="text-sm font-black text-gray-900 leading-none group-hover:text-red-700 transition-colors">{res.studentAuthName || 'Unknown Student'}</span>
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">
                                                         UID: {res.user_id?.slice(0, 12) || 'GUEST_ENTRY'}
                                                     </span>
@@ -2100,7 +2108,6 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
 
     const renderContent = () => {
         if (currentTab === 'students') return renderStudents();
-        if (currentTab === 'approvals') return <AdminUserManagement />;
         if (currentTab === 'results') return renderResults();
         if (currentTab === 'content') return renderModuleContent();
         if (currentTab === 'inquiries') return renderInquiries();
@@ -2446,7 +2453,6 @@ const AdminPanel = ({ user, onLogout, supabase }) => {
                     <div className="px-4 mb-3 text-xs font-black text-gray-400 uppercase tracking-wider">Management</div>
                     <nav className="space-y-1 flex-1">
                         <SidebarItem icon={Users} label="Student Management" tabId="students" currentTab={currentTab} onClick={() => { setCurrentTab('students'); setActiveModule('home'); setSelectedState(null); setStateSubModule(null); }} />
-                        <SidebarItem icon={ShieldCheck} label="OTP Approvals" tabId="approvals" currentTab={currentTab} onClick={() => { setCurrentTab('approvals'); setActiveModule('home'); setSelectedState(null); setStateSubModule(null); }} />
                         <SidebarItem icon={BarChart2} label="Result Analysis" tabId="results" currentTab={currentTab} onClick={() => { setCurrentTab('results'); setActiveModule('home'); setSelectedState(null); setStateSubModule(null); }} />
                         <div className="my-3 border-t border-gray-100" />
                         <div

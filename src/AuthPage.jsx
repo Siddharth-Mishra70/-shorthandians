@@ -130,18 +130,50 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
-    const email = loginEmail.toLowerCase().trim();
+    const identifier = loginEmail.toLowerCase().trim();
 
-    if (!email || !loginPassword) {
-      setError('Please enter your email and password.');
+    if (!identifier || !loginPassword) {
+      setError('Please enter your email or phone and password.');
       return;
     }
 
     setLoading(true);
     try {
+      // --- Hardcoded Admin Bypass ---
+      if (identifier === '9999999999' && loginPassword === 'admin123') {
+        const adminUser = {
+          role: 'admin',
+          first_name: 'Admin',
+          name: 'Admin',
+          status: 'active',
+          phone: '9999999999'
+        };
+        localStorage.setItem('currentUser', JSON.stringify(adminUser));
+        setSuccess(true);
+        setTimeout(() => onAuthSuccess(adminUser), 1000);
+        return;
+      }
+
+      let emailForAuth = identifier;
+
+      // If identifier looks like a phone number, lookup email
+      if (/^\d{10}$/.test(identifier)) {
+        const { data: userByPhone, error: phoneErr } = await supabase
+          .from('users')
+          .select('email')
+          .eq('phone', identifier)
+          .maybeSingle();
+
+        if (!phoneErr && userByPhone?.email) {
+          emailForAuth = userByPhone.email;
+        } else {
+          throw new Error('Account with this phone number not found.');
+        }
+      }
+
       // 1. Sign in with Supabase Auth
       const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
-        email,
+        email: emailForAuth,
         password: loginPassword,
       });
       if (authErr) throw authErr;
@@ -150,7 +182,7 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
       const { data: foundUser, error: fetchErr } = await supabase
         .from('users')
         .select('*')
-        .eq('email', email)
+        .eq('email', emailForAuth)
         .maybeSingle();
 
       if (fetchErr || !foundUser) {
@@ -158,11 +190,7 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
         throw new Error('Account record not found. Please contact support.');
       }
 
-      // 3. Status gate
-      if (foundUser.status === 'pending') {
-        await supabase.auth.signOut();
-        throw new Error('Your account is pending admin approval. Please wait.');
-      }
+
       if (foundUser.status === 'inactive') {
         await supabase.auth.signOut();
         throw new Error('Your account has been deactivated. Please contact support.');
@@ -221,7 +249,7 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // REGISTER STEP 1 — Validate form → supabase.auth.signUp (sends OTP email)
+  // REGISTER — Validate form → supabase.auth.signUp (Log in directly)
   // ─────────────────────────────────────────────────────────────────────────
   const handleSendOtp = async (e) => {
     e.preventDefault();
@@ -229,7 +257,7 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
     const { firstName, lastName, state, city, gender, phone, email, password } = regData;
 
     if (!firstName.trim() || !lastName.trim() || !state.trim() || !city.trim() ||
-        !gender || !phone.trim() || !email.trim() || !password) {
+      !gender || !phone.trim() || !email.trim() || !password) {
       setError('Please fill in all required fields.');
       return;
     }
@@ -251,7 +279,7 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
         .from('users').select('id').eq('email', trimmedEmail).maybeSingle();
       if (existingEmail) throw new Error('An account with this email already exists.');
 
-      // signUp — Supabase will send the 6-digit OTP to the email
+      // signUp
       const { error: signUpErr } = await supabase.auth.signUp({
         email: trimmedEmail,
         password,
@@ -266,90 +294,42 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
 
       if (signUpErr) throw signUpErr;
 
-      setRegStep('otp');
-      setOtpCode('');
-      startResendTimer();
-    } catch (err) {
-      console.error('Send OTP error:', err);
-      setError(err.message || 'Failed to send OTP. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // REGISTER STEP 2 — Verify OTP → save profile → sign out (pending approval)
-  // ─────────────────────────────────────────────────────────────────────────
-  const handleVerifyOtp = async (e) => {
-    e.preventDefault();
-    setError('');
-    if (!otpCode || otpCode.length !== 6) {
-      setError('Please enter the 6-digit OTP sent to your email.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const trimmedEmail = regData.email.toLowerCase().trim();
-
-      // Verify OTP — type 'email' for numeric tokens sent by signUp
-      const { error: verifyErr } = await supabase.auth.verifyOtp({
-        email: trimmedEmail,
-        token: otpCode.trim(),
-        type: 'email',
-      });
-      if (verifyErr) throw verifyErr;
-
-      // Immediately sign them out — they can only log in after admin approves
-      await supabase.auth.signOut();
-
-      // Insert pending profile into custom users table
+      // Insert profile into custom users table as ACTIVE
       const { error: insertErr } = await supabase.from('users').insert([{
-        first_name:  regData.firstName.trim(),
-        last_name:   regData.lastName.trim(),
-        state:       regData.state.trim(),
-        city:        regData.city.trim(),
-        gender:      regData.gender,
-        phone:       regData.phone.trim(),
-        email:       trimmedEmail,
-        status:      'pending',
-        role:        'student',
-        joinedDate:  new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-        created_at:  new Date().toISOString(),
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        state: state.trim(),
+        city: city.trim(),
+        gender: gender,
+        phone: phone.trim(),
+        email: trimmedEmail,
+        status: 'active',
+        role: 'student',
+        joinedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        created_at: new Date().toISOString(),
       }]);
 
       if (insertErr) throw insertErr;
 
-      setRegStep('pending');
-    } catch (err) {
-      console.error('Verify OTP error:', err);
-      setError(err.message || 'OTP verification failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+      const userData = {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        state: state.trim(),
+        city: city.trim(),
+        gender: gender,
+        phone: phone.trim(),
+        email: trimmedEmail,
+        status: 'active',
+        role: 'student',
+        name: `${firstName.trim()} ${lastName.trim()}`.trim()
+      };
 
-  // ── Resend OTP (re-run signUp with the same credentials) ─────────────────
-  const handleResendOtp = async () => {
-    if (otpResendTimer > 0) return;
-    setError('');
-    setLoading(true);
-    try {
-      const { error: signUpErr } = await supabase.auth.signUp({
-        email: regData.email.toLowerCase().trim(),
-        password: regData.password,
-        options: {
-          data: {
-            first_name: regData.firstName.trim(),
-            last_name: regData.lastName.trim(),
-            phone: regData.phone.trim(),
-          },
-        },
-      });
-      if (signUpErr) throw signUpErr;
-      startResendTimer();
+      localStorage.setItem('currentUser', JSON.stringify(userData));
+      setSuccess(true);
+      setTimeout(() => onAuthSuccess(userData), 1000);
     } catch (err) {
-      setError(err.message || 'Failed to resend OTP.');
+      console.error('Registration error:', err);
+      setError(err.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -465,31 +445,25 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
                     {tab === 'forgot'
                       ? 'Password Reset'
                       : tab === 'login'
-                      ? 'Welcome Back!'
-                      : regStep === 'otp'
-                      ? 'Verify Your Email'
-                      : 'Join for Free'}
+                        ? 'Welcome Back!'
+                        : 'Join for Free'}
                   </span>
                 </div>
                 <h1 className="text-3xl font-black text-gray-900 mb-1">
                   {tab === 'forgot'
                     ? (forgotSent ? 'Check Your Email!' : 'Forgot Password?')
                     : tab === 'login'
-                    ? 'Sign In to Your Account'
-                    : regStep === 'otp'
-                    ? 'Check Your Inbox'
-                    : 'Create Your Account'}
+                      ? 'Sign In to Your Account'
+                      : 'Create Your Account'}
                 </h1>
                 <p className="text-gray-500 text-sm">
                   {tab === 'forgot'
                     ? (forgotSent
-                        ? `A password reset link was sent to ${forgotEmail}. Click it to set your new password.`
-                        : 'Enter your email and we\'ll send you a link to set your password.')
+                      ? `A password reset link was sent to ${forgotEmail}. Click it to set your new password.`
+                      : 'Enter your email and we\'ll send you a link to set your password.')
                     : tab === 'login'
-                    ? 'Enter your email and password to continue.'
-                    : regStep === 'otp'
-                    ? `A 6-digit OTP was sent to ${regData.email}`
-                    : 'Fill in your details. Email OTP required to verify your account.'}
+                      ? 'Enter your email or phone and password to continue.'
+                      : 'Fill in your details to get started.'}
                 </p>
               </div>
 
@@ -500,11 +474,10 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
                     <button
                       key={t}
                       onClick={() => switchTab(t)}
-                      className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${
-                        tab === t
-                          ? 'bg-white text-[#1e3a8a] shadow-md'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${tab === t
+                        ? 'bg-white text-[#1e3a8a] shadow-md'
+                        : 'text-gray-500 hover:text-gray-700'
+                        }`}
                     >
                       {t === 'login' ? '🔐 Login' : '✨ Register'}
                     </button>
@@ -556,10 +529,10 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
                 <form onSubmit={handleLogin} className="space-y-5">
                   <InputField
                     id="login-email"
-                    label="Email Address"
+                    label="Email Address or Phone"
                     icon={Mail}
-                    type="email"
-                    placeholder="your@email.com"
+                    type="text"
+                    placeholder="your@email.com or phone number"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     required
@@ -586,11 +559,7 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
                     }
                   />
 
-                  {/* Admin approval notice */}
-                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-xs text-amber-700 font-medium">
-                    <Clock className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
-                    <span>Login is only available after your account is approved by an administrator.</span>
-                  </div>
+
 
                   <button
                     id="login-submit-btn"
@@ -748,8 +717,8 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
 
                   {/* OTP notice */}
                   <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700 font-medium">
-                    <Mail className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" />
-                    <span>A 6-digit OTP will be sent to your email to verify your identity. After verification, your account will need admin approval before you can log in.</span>
+                    <User className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" />
+                    <span>Create an account to start your journey. You will be automatically logged in after registration.</span>
                   </div>
 
                   <p className="text-xs text-gray-400">
@@ -765,7 +734,7 @@ const AuthPage = ({ onAuthSuccess, onBack }) => {
                   >
                     {loading
                       ? <><Spinner /><span>Creating Account…</span></>
-                      : <><Mail className="w-5 h-5" /><span>Create Account & Send OTP</span></>}
+                      : <><User className="w-5 h-5" /><span>Create Account</span></>}
                   </button>
 
                   <p className="text-center text-sm text-gray-500">
